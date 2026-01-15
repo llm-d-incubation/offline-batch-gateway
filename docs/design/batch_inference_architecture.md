@@ -67,7 +67,8 @@ The API should be compatible with [Batch API - OpenAI API](https://platform.open
 1. Batch jobs data structures:
     1. Priority queue:
         1. Stores references to batch jobs ordered by priority.
-        1. The ordering logic of the queue should be pluggable. The ordering can be based on a single numeric value that is calculated on each job via a plugin, or can be based on a given comparator. This logic can take into account various aspects, like slo, size, etc.
+        1. The ordering logic of the queue should be pluggable. The ordering can be based on a single numeric value that is calculated on each job via a plugin, or can be based on a given comparator. This logic can take into account various aspects, like SLO, size, etc.
+            1. Specifically, calculate the priority value as a function of an SLO value, for example the absolute time bound for starting or for completing the job.  
         1. It is also possible to have multiple queues if required, with a logic to pop jobs from these queues based on a pluggable inter-queue criteria.
     1. Metadata storage:
         1. Stores the metadata of batch jobs.
@@ -89,7 +90,7 @@ The API should be compatible with [Batch API - OpenAI API](https://platform.open
         1. Example logic:
             1. Closer SLO increases the dispatching rate; farther SLO reduces it.
             1. Inspect metrics from flow control: Less interactive load increases the dispatching rate; more interactive load decreases it.
-    1. Updates job status.
+    1. Updates job status. Provides a progress indicator, for example how many requests processed from the total number of requests in the job.
     1. Listens to job events (e.g. cancel, pause).
     1. Each batch processor may process multiple jobs concurrency via concurrent workers.
     1. Handles recovery from crashed processors.
@@ -111,4 +112,4 @@ The API should be compatible with [Batch API - OpenAI API](https://platform.open
 
 1. https://platform.openai.com/docs/guides/batch
 1. https://docs.anthropic.com/en/docs/build-with-claude/batch-processing
-1. https://docs.google.com/document/d/1notkq9s0qOmWmUNonZ8CfI-5jtGtHA4PGMI-xz8sGRE/edit?tab=t.0#heading=h.i76kzr3j3swj – Focuses on “online batch requests” that require a processing time scale of up to minutes and are handled asynchronously. The current document focuses on “offline batch jobs”.
+1. https://docs.google.com/document/d/1notkq9s0qOmWmUNonZ8CfI-5jtGtHA4PGMI-xz8sGRE/edit?tab=t.0#heading=h.i76kzr3j3swj – Focuses on a mechanism that enables to submit and track individual asynchronous requests. The current document focuses on handling batch jobs, where each job specifies a file that consists of multiple individual requests and the output is stored in a file. The current document focuses on the batch jobs API handler and on the batch processor that processes a specification file. The batch processor can submit individual requests using the asynchronous mechanism specified in the referenced document.
