@@ -5,18 +5,19 @@ Revision 4
 
 ## Customer use cases
 
-The use case is running in an asynchronous way a set of inference requests which are grouped and tracked together, where the completion of these inference requests is more time tolerant relative to interactive (time-sensitive) inference requests.  
+The use case is running asynchronously a set of inference requests which are grouped and tracked together in a job, where the completion of these inference requests is more time tolerant relative to interactive (time-sensitive) inference requests.  
 
 The time tolerance for processing of interactive inference requests is typically on the scale of seconds and up to minutes.  
-The time tolerance for processing batch jobs is typically on the scale of hours, for example 12 house, 24 hours, 1 week.
+The time tolerance for processing batch jobs is typically on the scale of hours, for example 12 house, 24 hours, 48 hours.
 
 Example use cases include:  
 
 - Inferencing a large dataset.
 - Generating embeddings for large datasets.
 - Evaluations of various types.
+- Offline analysis of various types.
 
-In systems that charge for inference requests - billing rates of batch inference requests may be different (typically lower) relative to the billing of interactive inference requests, due to the time tolerance.
+In systems that charge for inference requests - billing rates of batch inference requests may be different (typically lower) relative to the billing rates of interactive inference requests, due to the time tolerance.
 
 ## High level API requirements
 
