@@ -14,16 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-
-package batch_shared
+package batch
 
 // Job represents a task polled from queue.
 type Job struct {
-    RequetId    string
-    Model string
-    ID          string
-    SLO string
-    EndPoint    string
-    RequestBody  []byte
-    //... other job fields
+	RequetId    string
+	Model       string
+	ID          string
+	SLO         string
+	EndPoint    string
+	RequestBody []byte
+	//... other job fields
 }

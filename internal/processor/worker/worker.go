@@ -25,13 +25,14 @@ import (
 
 	"github.com/llm-d-incubation/batch-gateway/internal/processor/config"
 	"github.com/llm-d-incubation/batch-gateway/internal/processor/metrics"
+	"github.com/llm-d-incubation/batch-gateway/internal/shared/batch"
 )
 
 type Processor struct {
 	cfg          *config.ProcessorConfig
 	workerPool   *WorkerPool
-	llmClient    *batch_shared.LLMClient
-	dbConnection *batch_shared.DBConnection
+	llmClient    *batch.LLMClient
+	dbConnection *batch.DBConnection
 }
 
 func NewWorkerPool(maxWorkers int) *WorkerPool {
