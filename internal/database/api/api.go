@@ -8,6 +8,21 @@ import (
 	"github.com/llm-d-incubation/batch-gateway/internal/util/logging"
 )
 
+// -- Admin interfaces --
+
+// BatchClientAdmin specifies administrative interface functions.
+type BatchClientAdmin interface {
+
+	// GetContext returns a derived context for a call.
+	// If no time limit is set, the context will be set with a default time limit.
+	GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc)
+
+	// Close closes the client.
+	Close() error
+}
+
+// -- Batch jobs metadata store --
+
 type BatchJob struct {
 	ID     string    // [mandatory, immutable, returned by get, parsed by DB, must be unique] User provided unique ID of the job. This ID must be unique.
 	SLO    time.Time // [mandatory, immutable, returned by get, parsed by DB] The time based on which the job should be prioritized relative to other jobs.
@@ -30,22 +45,13 @@ func (bj *BatchJob) IsValid() error {
 	return nil
 }
 
-type BatchClientAdmin interface {
-
-	// Get a default derived context for a call.
-	GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc)
-
-	// Close closes the client.
-	Close() error
-}
-
 // BatchDBClient enables to manage batch job metadata objects in persistent storage.
 type BatchDBClient interface {
 	BatchClientAdmin
 
-	// Store stores a batch job.
+	// Store stores a batch job metadata object.
 	// Returns the ID of the job in the database.
-	Store(ctx context.Context, logger logging.Logger, job *BatchJob) (jobID string, err error)
+	Store(ctx context.Context, logger logging.Logger, job *BatchJob) (ID string, err error)
 
 	// Get gets the information (static and dynamic) of batch jobs.
 	// If IDs are specified, this function will get jobs by the specified IDs.
@@ -59,7 +65,7 @@ type BatchDBClient interface {
 	// The value specified in 'limit' can be different between iterations, and is a recommendation only.
 	// jobs is a slice of returned jobs.
 	// cursor is an opaque integer that should be given in the next paginated call via the 'start' parameter.
-	Get(ctx context.Context, logger logging.Logger, jobIDs []string, tags []string, tagsLogicalCond TagsLogicalCond,
+	Get(ctx context.Context, logger logging.Logger, IDs []string, tags []string, tagsLogicalCond TagsLogicalCond,
 		includeStatic bool, start, limit int) (
 		jobs []*BatchJob, cursor int, err error)
 
@@ -70,7 +76,7 @@ type BatchDBClient interface {
 	Update(ctx context.Context, logger logging.Logger, job *BatchJob) (err error)
 
 	// Delete deletes batch jobs.
-	Delete(ctx context.Context, logger logging.Logger, jobIDs []string) (deletedJobIDs []string, err error)
+	Delete(ctx context.Context, logger logging.Logger, IDs []string) (deletedIDs []string, err error)
 }
 
 type TagsLogicalCond int
@@ -87,12 +93,14 @@ var TagsLogicalCondNames = map[TagsLogicalCond]string{
 	TagsLogicalCondOr:  "or",
 }
 
+// -- Batch jobs priority queue --
+
 type BatchJobPriority struct {
-	ID  string
-	SLO time.Time // The SLO value determines the priority of the job id.
+	ID  string    // ID of the batch job.
+	SLO time.Time // The SLO value determines the priority of the job.
 }
 
-// BatchPriorityQueueClient enables to perform operation on a priority queue.
+// BatchPriorityQueueClient enables to perform operations on a priority queue of jobs.
 type BatchPriorityQueueClient interface {
 	BatchClientAdmin
 
@@ -104,19 +112,21 @@ type BatchPriorityQueueClient interface {
 	// The function blocks up to the timeout value for a job priority object to be available.
 	// If the timeout value is zero, the function returns immediately.
 	Dequeue(ctx context.Context, logger logging.Logger, timeout time.Duration, maxObjs int) (
-		jobPriority []*BatchJobPriority, err error)
+		jobPriorities []*BatchJobPriority, err error)
 
 	// Remove deletes a job priority object from the queue.
 	Remove(ctx context.Context, logger logging.Logger, jobPriority *BatchJobPriority) error
 }
 
+// -- Batch jobs events and channels --
+
 type BatchEventType int
 
 const (
-	BatchEventCancel  BatchEventType = iota // Cancel a job.
-	BatchEventPause                         // Pause a job.
-	BatchEventUnpause                       // Unpause a job.
-	BatchEventMaxVal                        // [Internal] Indicates the max value for the enum. Don't use this value.
+	BatchEventCancel BatchEventType = iota // Cancel a job.
+	BatchEventPause                        // Pause a job.
+	BatchEventResume                       // Resume a job.
+	BatchEventMaxVal                       // [Internal] Indicates the max value for the enum. Don't use this value.
 )
 
 type BatchEvent struct {
@@ -141,34 +151,36 @@ func (be *BatchEvent) IsValid() error {
 type BatchEventsChan struct {
 	ID      string          // ID of the job.
 	Events  chan BatchEvent // Channel for receiving events for the job.
-	CloseFn func()          // Function for closing the channel and the associated resources. Must be called by the listener when the job's processing is finished.
+	CloseFn func()          // Function for closing the channel and the associated resources. Must be called by the consumer when the job's processing is finished.
 }
 
-// BatchEventChannelClient enables to create and use an event channel for a batch job being processed.
+// BatchEventChannelClient enables to create and use event channels for batch jobs being processed.
 type BatchEventChannelClient interface {
 	BatchClientAdmin
 
-	// GetChannel gets an events channel for the jobID.
-	// When processing of job is finished by the caller - the caller MUST call the function
-	// CloseFn specified in BatchEventsChan, to close the associated resources.
-	GetChannel(ctx context.Context, logger logging.Logger, jobID string) (batchEventsChan *BatchEventsChan, err error)
+	// ConsumerGetChannel gets an events channel for the job ID, to be used by a consumer to listen for events.
+	// When the caller finishes processing a job - the caller must call the function CloseFn specified in BatchEventsChan,
+	// to close the associated resources.
+	ConsumerGetChannel(ctx context.Context, logger logging.Logger, ID string) (batchEventsChan *BatchEventsChan, err error)
 
-	// Send sends events for the specified jobs.
+	// ProducerSendEvents sends the specified events via associated event channels.
 	// The events are sent and consumed in FIFO order.
-	SendEvent(ctx context.Context, logger logging.Logger, events []BatchEvent) (sentIDs []string, err error)
+	ProducerSendEvents(ctx context.Context, logger logging.Logger, events []BatchEvent) (sentIDs []string, err error)
 }
 
-// BatchStatusClient enables to manage temporary job information.
+// -- Batch jobs temporary status store --
+
+// BatchStatusClient enables to manage temporary job status.
 type BatchStatusClient interface {
 	BatchClientAdmin
 
 	// Set stores or updates status data for a job.
-	Set(ctx context.Context, logger logging.Logger, jobID string, TTL int, data []byte) error
+	Set(ctx context.Context, logger logging.Logger, ID string, TTL int, data []byte) error
 
-	// Get retrieves the status data for a job.
+	// Get retrieves the status data of a job.
 	// If no data exists (nil, nil) is returned.
-	Get(ctx context.Context, logger logging.Logger, jobID string) (data []byte, err error)
+	Get(ctx context.Context, logger logging.Logger, ID string) (data []byte, err error)
 
 	// Delete removes the status data for a job.
-	Delete(ctx context.Context, logger logging.Logger, jobID string) error
+	Delete(ctx context.Context, logger logging.Logger, ID string) error
 }
