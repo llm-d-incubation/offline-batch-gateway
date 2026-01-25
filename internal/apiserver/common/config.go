@@ -31,10 +31,11 @@ import (
 
 // Use snake_case for YAML, and use camelCase for JSON
 type ServerConfig struct {
-	Host        string `json:"host" yaml:"host"`
-	Port        string `json:"port" yaml:"port"`
-	SSLCertFile string `json:"sslCertFile" yaml:"ssl_cert_file"`
-	SSLKeyFile  string `json:"sslKeyFile" yaml:"ssl_key_file"`
+	Host            string `json:"host" yaml:"host"`
+	Port            string `json:"port" yaml:"port"`
+	SSLCertFile     string `json:"sslCertFile" yaml:"ssl_cert_file"`
+	SSLKeyFile      string `json:"sslKeyFile" yaml:"ssl_key_file"`
+	BatchTTLSeconds int    `json:"batchTTLSeconds" yaml:"batch_ttl_seconds"`
 }
 
 func NewConfig() *ServerConfig {
@@ -52,6 +53,7 @@ func (c *ServerConfig) Load() error {
 	fs.StringVar(&c.Port, "port", "8000", "server port")
 	fs.StringVar(&c.SSLCertFile, "ssl-cert-file", "", "SSL certificate file")
 	fs.StringVar(&c.SSLKeyFile, "ssl-key-file", "", "SSL key file")
+	fs.IntVar(&c.BatchTTLSeconds, "batch-ttl-seconds", 2592000, "batch TTL in seconds (default: 2592000 = 30 days)")
 
 	// Parse all flags (klog flags and application flags)
 	if err := fs.Parse(os.Args[1:]); err != nil {

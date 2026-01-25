@@ -20,6 +20,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"testing"
 
 	"github.com/llm-d-incubation/batch-gateway/internal/apiserver/common"
 	"github.com/llm-d-incubation/batch-gateway/internal/shared/openai"
@@ -41,15 +42,18 @@ func RecoveryMiddleware(next http.Handler) http.Handler {
 					panicErr = fmt.Errorf("%v", e)
 				}
 
-				logger := logging.GetRequestLogger(r)
-				logger.Error(panicErr, "handler panic",
-					"method", r.Method,
-					"path", r.URL.Path,
-					//"stack", string(debug.Stack()),
-				)
+				if !testing.Testing() || testing.Verbose() {
+					logger := logging.GetRequestLogger(r)
+					logger.Error(panicErr, "handler panic",
+						"method", r.Method,
+						"path", r.URL.Path,
+						//"stack", string(debug.Stack()),
+					)
+				}
+
 				requestID := GetRequestIDFromContext(r.Context())
-				oaiErr := openai.NewError(http.StatusInternalServerError, "", "The server had an error while processing your request", &requestID)
-				common.WriteOpenAIError(r.Context(), w, oaiErr)
+				oaiErr := openai.NewAPIError(http.StatusInternalServerError, "", "The server had an error while processing your request", &requestID)
+				common.WriteAPIError(r.Context(), w, oaiErr)
 			}
 		}()
 

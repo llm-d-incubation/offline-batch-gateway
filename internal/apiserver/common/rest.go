@@ -65,7 +65,7 @@ func WriteJSONResponse(ctx context.Context, w http.ResponseWriter, status int, o
 	}
 }
 
-func WriteOpenAIError(ctx context.Context, w http.ResponseWriter, oaiErr openai.Error) {
+func WriteAPIError(ctx context.Context, w http.ResponseWriter, oaiErr openai.APIError) {
 	errorResp := openai.ErrorResponse{
 		Error: oaiErr,
 	}
@@ -74,8 +74,11 @@ func WriteOpenAIError(ctx context.Context, w http.ResponseWriter, oaiErr openai.
 }
 
 func WriteNotImplementedError(ctx context.Context, w http.ResponseWriter) {
-	oaiErr := openai.NewError(http.StatusNotImplemented, "", "This is not yet implemented", nil)
+	apiErr := openai.NewAPIError(http.StatusNotImplemented, "", "This is not yet implemented", nil)
+	WriteAPIError(ctx, w, apiErr)
+}
 
-	WriteOpenAIError(ctx, w, oaiErr)
-
+func WriteInternalServerError(ctx context.Context, w http.ResponseWriter) {
+	apiErr := openai.NewAPIError(http.StatusInternalServerError, "", "Internal Server Error", nil)
+	WriteAPIError(ctx, w, apiErr)
 }
