@@ -22,20 +22,9 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/llm-d-incubation/batch-gateway/internal/shared/store"
 )
-
-// -- Admin interfaces --
-
-// BatchClientAdmin specifies administrative interface functions.
-type BatchClientAdmin interface {
-
-	// GetContext returns a derived context for a call.
-	// If no time limit is set, the context will be set with a default time limit.
-	GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc)
-
-	// Close closes the client.
-	Close() error
-}
 
 // -- Batch jobs metadata store --
 
@@ -63,7 +52,7 @@ func (bj *BatchJob) IsValid() error {
 
 // BatchDBClient enables to manage batch job metadata objects in persistent storage.
 type BatchDBClient interface {
-	BatchClientAdmin
+	store.BatchClientAdmin
 
 	// Store stores a batch job metadata object.
 	// Returns the ID of the job in the database.
@@ -118,7 +107,7 @@ type BatchJobPriority struct {
 
 // BatchPriorityQueueClient enables to perform operations on a priority queue of jobs.
 type BatchPriorityQueueClient interface {
-	BatchClientAdmin
+	store.BatchClientAdmin
 
 	// Enqueue adds a job priority object to the queue.
 	Enqueue(ctx context.Context, jobPriority *BatchJobPriority) error
@@ -172,7 +161,7 @@ type BatchEventsChan struct {
 
 // BatchEventChannelClient enables to create and use event channels for batch jobs being processed.
 type BatchEventChannelClient interface {
-	BatchClientAdmin
+	store.BatchClientAdmin
 
 	// ConsumerGetChannel gets an events channel for the job ID, to be used by a consumer to listen for events.
 	// When the caller finishes processing a job - the caller must call the function CloseFn specified in BatchEventsChan,
@@ -188,7 +177,7 @@ type BatchEventChannelClient interface {
 
 // BatchStatusClient enables to manage temporary job status.
 type BatchStatusClient interface {
-	BatchClientAdmin
+	store.BatchClientAdmin
 
 	// Set stores or updates status data for a job.
 	Set(ctx context.Context, ID string, TTL int, data []byte) error

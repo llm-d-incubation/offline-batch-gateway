@@ -22,6 +22,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/llm-d-incubation/batch-gateway/internal/shared/store"
 )
 
 type BatchFileMetadata struct {
@@ -31,7 +33,7 @@ type BatchFileMetadata struct {
 }
 
 type BatchFilesClient interface {
-	BatchClientAdmin
+	store.BatchClientAdmin
 
 	// Store stores a file in the files storage.
 	Store(ctx context.Context, location string, fileSizeLimit int64, reader io.Reader) (
