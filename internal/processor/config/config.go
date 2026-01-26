@@ -42,6 +42,15 @@ type ProcessorConfig struct {
 	Port        string `yaml:"port"`
 	SSLCertFile string `yaml:"ssl_cert_file"`
 	SSLKeyFile  string `yaml:"ssl_key_file"`
+
+	// InferenceGatewayURL is the base URL of the inference gateway (llm-d or GAIE)
+	InferenceGatewayURL string `yaml:"inference_gateway_url"`
+
+	// InferenceRequestTimeout is the timeout for individual inference requests
+	InferenceRequestTimeout time.Duration `yaml:"inference_request_timeout"`
+
+	// InferenceAPIKey is the optional API key for authenticating with the inference gateway
+	InferenceAPIKey string `yaml:"inference_api_key"`
 }
 
 func (pc *ProcessorConfig) SSLEnabled() bool {
@@ -73,6 +82,10 @@ func NewConfig() *ProcessorConfig {
 		MaxJobConcurrency: 10,
 		NumWorkers:        1,
 		Port:              ":9090",
+
+		InferenceGatewayURL:     "http://localhost:8000",
+		InferenceRequestTimeout: 5 * time.Minute,
+		InferenceAPIKey:         "",
 	}
 }
 
