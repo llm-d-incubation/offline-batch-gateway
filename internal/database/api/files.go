@@ -27,7 +27,7 @@ import (
 type BatchFileMetadata struct {
 	Location string    // Absolute location of the file.
 	Size     int64     // The size of the file in bytes.
-	ModeTime time.Time // Modification time.
+	ModTime  time.Time // Modification time.
 }
 
 type BatchFilesClient interface {
