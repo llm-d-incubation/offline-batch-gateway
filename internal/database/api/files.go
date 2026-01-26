@@ -25,20 +25,24 @@ import (
 )
 
 type BatchFileMetadata struct {
-	Location string
-	Size     int64
-	ModeTime time.Time
+	Location string    // Absolute location of the file.
+	Size     int64     // The size of the file in bytes.
+	ModeTime time.Time // Modification time.
 }
 
 type BatchFilesClient interface {
 	BatchClientAdmin
 
+	// Store stores a file in the files storage.
 	Store(ctx context.Context, location string, fileSizeLimit int64, reader io.Reader) (
 		fileMd *BatchFileMetadata, err error)
 
+	// Retrieve retrieves a file from the files storage.
 	Retrieve(ctx context.Context, location string) (reader io.Reader, fileMd *BatchFileMetadata, err error)
 
+	// List lists the files in the specified location. Location here is a pattern.
 	List(ctx context.Context, location string) (files []BatchFileMetadata, err error)
 
+	// Delete deletes the file in the specified location.
 	Delete(ctx context.Context, location string) (err error)
 }
