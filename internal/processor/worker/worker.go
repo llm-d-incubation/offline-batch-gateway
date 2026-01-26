@@ -217,9 +217,17 @@ func (p *Processor) processJobs(ctx context.Context, tasks []*db.BatchJobPriorit
 func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJob) {
 	// metrics
 	startTime := time.Now()
+	metadata := batch.JobResultMetadata{}
 	defer func() {
-		metrics.RecordJobDuration(time.Since(startTime))
-		metrics.RecordJobProcessed()
+		// TODO:: get tenant id from job.Spec
+		// job result / failure reason for metric
+		// TODO:: how to check if the failure is on user or system
+		tenantID := "unknown"
+		jobFailureReason := metrics.ReasonUnknown
+		jobResult := metrics.ResultSuccess
+
+		metrics.RecordJobDuration(time.Since(startTime), tenantID, metrics.GetSizeBucket(metadata.Total))
+		metrics.RecordJobProcessed(jobResult, jobFailureReason)
 	}()
 
 	logger := klog.FromContext(ctx)
@@ -245,7 +253,7 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 	lines := []string{"req1", "req2", "req3"}
 
 	// result metadata init
-	metadata := batch.JobResultMetadata{
+	metadata = batch.JobResultMetadata{
 		Total:     len(lines),
 		Succeeded: 0,
 		Failed:    0,
@@ -289,6 +297,7 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 			mockRequest := &batch.InferenceRequest{}
 			result, err := p.clients.inference.Generate(ctx, mockRequest)
 
+			// shared resources (metadata / totaljoblines) lock
 			mu.Lock()
 			defer mu.Unlock()
 
@@ -300,8 +309,9 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 
 			if err := p.handleResponse(ctx, result); err != nil {
 				metadata.Failed++
+			} else {
+				metadata.Succeeded++
 			}
-			metadata.Succeeded++
 		}(line)
 
 	}
