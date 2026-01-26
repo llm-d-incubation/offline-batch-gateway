@@ -130,7 +130,7 @@ func main() {
 
 	// initialize processor (worker pool manager)
 	// get max worker from cfg then decide the worker pool size
-	logger.V(logging.INFO).Info("Initializing worker processor", "maxWorkers", cfg.MaxWorkers)
+	logger.V(logging.INFO).Info("Initializing worker processor", "maxWorkers", cfg.NumWorkers)
 	proc := worker.NewProcessor(cfg, processorClients)
 
 	// start the main polling loop

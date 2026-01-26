@@ -69,7 +69,7 @@ func NewProcessor(
 ) *Processor {
 	return &Processor{
 		cfg:        cfg,
-		workerPool: NewWorkerPool(cfg.MaxWorkers),
+		workerPool: NewWorkerPool(cfg.NumWorkers),
 		clients:    clients,
 	}
 }
@@ -84,7 +84,7 @@ func (p *Processor) prepare(ctx context.Context) error {
 		return fmt.Errorf("critical clients are missing in Processor")
 	}
 
-	logger.V(logging.DEBUG).Info("Processor pre-flight check done", "max_workers", p.cfg.MaxWorkers)
+	logger.V(logging.DEBUG).Info("Processor pre-flight check done", "max_workers", p.cfg.NumWorkers)
 	return nil
 }
 
@@ -98,7 +98,7 @@ func (p *Processor) RunPollingLoop(ctx context.Context) error {
 	logger.V(logging.INFO).Info(
 		"Polling loop started",
 		"loopInterval", p.cfg.PollInterval,
-		"maxWorkers", p.cfg.MaxWorkers,
+		"maxWorkers", p.cfg.NumWorkers,
 	)
 	ticker := time.NewTicker(p.cfg.PollInterval)
 	defer ticker.Stop()
@@ -274,6 +274,13 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 				<-sem
 				wg.Done()
 			}()
+
+			// check again for signal in the goroutine
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			// TODO:: line parsing
 			// TODO:: check allowed methods
 			// TODO:: request validation
