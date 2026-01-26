@@ -22,22 +22,65 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// labels definition
+const (
+	// result labels
+	ResultSuccess = "success"
+	ResultFailed  = "failed"
+
+	// reason lables
+	ReasonUnknown     = "unknown"
+	ReasonUserError   = "user_error"   // method, request validation failed.. etc.,
+	ReasonSystemError = "system_error" // SLO failed, system error.. etc.,
+
+	// size bucket labels
+	Bucket100   = "100"   // less than 100 lines
+	Bucket1000  = "1000"  // less than 1000 lines
+	Bucket10000 = "10000" // less than 10000 lines
+	Bucket30000 = "30000" // less than 30000 lines
+	BucketLarge = "large" // more than 30000 lines
+)
+
+func GetSizeBucket(totalLines int) string {
+	switch {
+	case totalLines < 100:
+		return Bucket100
+	case totalLines < 1000:
+		return Bucket1000
+	case totalLines < 10000:
+		return Bucket10000
+	case totalLines < 30000:
+		return Bucket30000
+	default:
+		return BucketLarge
+	}
+}
+
 var (
 	// number of jobs processed so far
-	jobsProcessed = prometheus.NewCounter(
+	jobsProcessed = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_processed_total",
 			Help: "Total number of jobs processed",
-		},
+		}, []string{"result", "reason"},
 	)
 
 	// duration of job processing
-	jobProcessingDuration = prometheus.NewHistogram(
+	jobProcessingDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "job_processing_duration_seconds",
-			Help:    "Duration of job processing in seconds",
-			Buckets: prometheus.ExponentialBuckets(0.1, 2, 10), // from 100ms to ~51s
-		},
+			Name: "job_processing_duration_seconds",
+			Help: "Duration of job processing in seconds",
+			// Buckets -
+			// Bucket 1: ~ 0.1s
+			// Bucket 2: ~ 0.2s
+			// Bucket 3: ~ 0.4s
+			// Bucket 4: ~ 0.8s
+			// ...
+			// Bucket 13: ~ 409.6s (approx. 6.8m)
+			// Bucket 14: ~ 819.2s (approx. 13.6m)
+			// Bucket 15: ~ 1838.4  (approx. 27.3m)
+			Buckets: prometheus.ExponentialBuckets(0.1, 2, 15),
+		}, []string{"tenantID", "size_bucket"},
 	)
 
 	// current number of active workers
@@ -68,13 +111,13 @@ func init() {
 // Recorder funcs
 
 // RecordJobProcessed increments the total processed jobs count.
-func RecordJobProcessed() {
-	jobsProcessed.Inc()
+func RecordJobProcessed(result string, reason string) {
+	jobsProcessed.WithLabelValues(result, reason).Inc()
 }
 
 // RecordJobDuration observes the time taken to process a job.
-func RecordJobDuration(duration time.Duration) {
-	jobProcessingDuration.Observe(duration.Seconds())
+func RecordJobDuration(duration time.Duration, tenantID string, sizeBucket string) {
+	jobProcessingDuration.WithLabelValues(tenantID, sizeBucket).Observe(duration.Seconds())
 }
 
 // IncActiveWorkers increments the gauge for active workers.
