@@ -26,13 +26,22 @@ import (
 )
 
 type ProcessorConfig struct {
-	TaskWaitTime      time.Duration `yaml:"task_wait_time"`
-	MaxWorkers        int           `yaml:"max_workers"`
-	MaxJobConcurrency int           `yaml:"max_job_concurrency"`
-	PollInterval      time.Duration `yaml:"poll_interval"`
-	Port              string        `yaml:"port"`
-	SSLCertFile       string        `yaml:"ssl_cert_file"`
-	SSLKeyFile        string        `yaml:"ssl_key_file"`
+	// TaskWaitTime is the timeout parameter used when dequeueing from the priority queue
+	// This should be shorter than PollInterval
+	TaskWaitTime time.Duration `yaml:"task_wait_time"`
+
+	// NumWorkers is the fixed number of worker goroutines spawned to process jobs
+	NumWorkers int `yaml:"num_workers"`
+
+	// MaxJobConcurrency defines how many lines within a single job are processed concurrently
+	MaxJobConcurrency int `yaml:"max_job_concurrency"`
+
+	// PollInterval defines how frequently the processor checks the database for new jobs
+	PollInterval time.Duration `yaml:"poll_interval"`
+
+	Port        string `yaml:"port"`
+	SSLCertFile string `yaml:"ssl_cert_file"`
+	SSLKeyFile  string `yaml:"ssl_key_file"`
 }
 
 func (pc *ProcessorConfig) SSLEnabled() bool {
@@ -62,7 +71,7 @@ func NewConfig() *ProcessorConfig {
 		TaskWaitTime: 1 * time.Second,
 
 		MaxJobConcurrency: 10,
-		MaxWorkers:        10,
+		NumWorkers:        10,
 		Port:              ":9090",
 	}
 }
