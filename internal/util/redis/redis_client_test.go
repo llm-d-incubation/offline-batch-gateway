@@ -20,96 +20,98 @@ package redis_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/llm-d-incubation/batch-gateway/internal/util/redis"
 	utls "github.com/llm-d-incubation/batch-gateway/internal/util/tls"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	gredis "github.com/redis/go-redis/v9"
-	"k8s.io/klog/v2"
 )
+
+func setupRedisClient(t *testing.T, redisUrl, redisCaCert string) *gredis.Client {
+	t.Helper()
+	cfg := &redis.RedisClientConfig{
+		Url:         redisUrl,
+		ServiceName: "test-service",
+	}
+	if redisCaCert != "" {
+		cfg.EnableTLS = true
+		cfg.Certificates = &utls.Certificates{
+			CaCertFile: redisCaCert,
+		}
+	}
+	rds, err := redis.NewRedisClient(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("Failed to create redis client: %v", err)
+	}
+	return rds
+}
 
 func TestRedisClient(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Redis Client Suite")
-}
+	redisUrl := os.Getenv("REDIS_URL")
+	redisCaCert := os.Getenv("REDIS_CACERT_PATH")
 
-var (
-	logger      klog.Logger
-	redisUrl    string
-	redisCaCert string
-	minirds     *miniredis.Miniredis = nil
-)
+	var minirds *miniredis.Miniredis
 
-func init() {
-	fmt.Println("Initializing redis client test")
-	logger = klog.Background()
-	redisUrl = os.Getenv("WX_REDIS_URL")
-	redisCaCert = os.Getenv("WX_REDIS_CACERT_PATH")
-}
-
-var _ = BeforeSuite(func() {
+	// Setup: start miniredis if no external redis URL is provided
 	if redisUrl == "" {
-		minirds = miniredis.RunT(GinkgoT())
-		Expect(minirds).ToNot(BeNil())
+		minirds = miniredis.NewMiniRedis()
+		if err := minirds.Start(); err != nil {
+			t.Fatalf("Failed to start miniredis: %v", err)
+		}
 		redisUrl = "redis://" + minirds.Addr()
+		t.Cleanup(func() {
+			minirds.Close()
+		})
 	}
-})
-
-var _ = AfterSuite(func() {
-})
-
-var _ = Describe("Redis Client", func() {
-	var rds *gredis.Client
-	var err error
-
-	BeforeEach(func() {
-		cfg := &redis.RedisClientConfig{
-			Url:         redisUrl,
-			ServiceName: "test-service",
-		}
-		if redisCaCert != "" {
-			cfg.EnableTLS = true
-			cfg.Certificates = &utls.Certificates{
-				CaCertFile: redisCaCert,
-			}
-		}
-		rds, err = redis.NewRedisClient(context.Background(), cfg)
-		Expect(err).To(BeNil())
-	})
-
-	AfterEach(func() {
-		if rds != nil {
+	t.Run("creates client", func(t *testing.T) {
+		rds := setupRedisClient(t, redisUrl, redisCaCert)
+		t.Cleanup(func() {
 			rds.Close()
+		})
+		t.Logf("Memory address of redis client: %p", rds)
+		if rds == nil {
+			t.Fatal("Expected redis client to be non-nil")
 		}
 	})
 
-	It("should create a redis client", func() {
-		fmt.Printf("Memory address of redis client: %p\n", rds)
-		Expect(rds).NotTo(BeNil())
-	})
+	t.Run("basic operations", func(t *testing.T) {
+		rds := setupRedisClient(t, redisUrl, redisCaCert)
+		t.Cleanup(func() {
+			rds.Close()
+		})
 
-	It("should set, get and delete a key", func() {
 		_, err := rds.Set(context.Background(), "k1", "v1", -1).Result()
-		Expect(err).To(BeNil())
+		if err != nil {
+			t.Fatalf("Failed to set key: %v", err)
+		}
+
 		val, err := rds.Get(context.Background(), "k1").Result()
-		Expect(err).To(BeNil())
-		Expect(val).To(Equal("v1"))
+		if err != nil {
+			t.Fatalf("Failed to get key: %v", err)
+		}
+		if val != "v1" {
+			t.Errorf("Expected value 'v1', got '%s'", val)
+		}
+
 		_, err = rds.Del(context.Background(), "k1").Result()
-		Expect(err).To(BeNil())
+		if err != nil {
+			t.Fatalf("Failed to delete key: %v", err)
+		}
 	})
 
-	It("should fail to create a redis client with invalid URL", func() {
+	t.Run("negative case", func(t *testing.T) {
 		cfgInv := &redis.RedisClientConfig{
 			Url:         "redis://invalid-url",
 			ServiceName: "test-service",
 		}
 		rdsInv, errInv := redis.NewRedisClient(context.Background(), cfgInv)
-		Expect(errInv).ToNot(BeNil())
-		Expect(rdsInv).To(BeNil())
+		if errInv == nil {
+			t.Fatal("Expected error when creating redis client with invalid URL, got nil")
+		}
+		if rdsInv != nil {
+			t.Errorf("Expected redis client to be nil with invalid URL, got %v", rdsInv)
+		}
 	})
-})
+}
