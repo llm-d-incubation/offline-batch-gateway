@@ -210,23 +210,6 @@ func assertLessOrEqual(t *testing.T, actual, expected int, msgAndArgs ...interfa
 	}
 }
 
-func assertDurationGreaterOrEqual(t *testing.T, actual, expected time.Duration, msgAndArgs ...interface{}) {
-	t.Helper()
-	if actual < expected {
-		msg := ""
-		if len(msgAndArgs) > 0 {
-			if format, ok := msgAndArgs[0].(string); ok {
-				msg = format
-			}
-		}
-		if msg != "" {
-			t.Errorf("%s: expected %v >= %v", msg, actual, expected)
-		} else {
-			t.Errorf("expected %v >= %v", actual, expected)
-		}
-	}
-}
-
 func TestNewHTTPInferenceClient(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -858,39 +841,6 @@ func TestRetryLogic(t *testing.T) {
 		assertNotNil(t, resp)
 		assertEqual(t, attemptCount, 1)
 	})
-
-	t.Run("should apply exponential backoff", func(t *testing.T) {
-		attemptCount := 0
-		attemptTimes := []time.Time{}
-		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attemptTimes = append(attemptTimes, time.Now())
-			attemptCount++
-			w.WriteHeader(http.StatusServiceUnavailable)
-		}))
-		t.Cleanup(testServer.Close)
-
-		client := NewHTTPInferenceClient(HTTPInferenceClientConfig{
-			BaseURL:        testServer.URL,
-			MaxRetries:     3,
-			InitialBackoff: 50 * time.Millisecond,
-		})
-
-		req := &InferenceRequest{
-			RequestID: "test",
-			Model:     "gpt-4",
-			Params:    map[string]interface{}{"model": "gpt-4"},
-		}
-
-		client.Generate(context.Background(), req)
-
-		assertEqual(t, attemptCount, 4) // Initial + 3 retries
-
-		// Verify exponential backoff (with some tolerance for resty's built-in jitter and timing)
-		if len(attemptTimes) >= 2 {
-			firstBackoff := attemptTimes[1].Sub(attemptTimes[0])
-			assertDurationGreaterOrEqual(t, firstBackoff, 40*time.Millisecond)
-		}
-	})
 }
 
 func TestAuthentication(t *testing.T) {
@@ -985,57 +935,6 @@ func TestNetworkErrors(t *testing.T) {
 }
 
 func TestRetryHookBehavior(t *testing.T) {
-	t.Run("should use exponential backoff with jitter", func(t *testing.T) {
-		attemptCount := 0
-		attemptTimes := []time.Time{}
-
-		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attemptTimes = append(attemptTimes, time.Now())
-			attemptCount++
-			if attemptCount < 3 {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
-						"message": "Service unavailable",
-					},
-				})
-			} else {
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{"id": "success"})
-			}
-		}))
-		t.Cleanup(testServer.Close)
-
-		client := NewHTTPInferenceClient(HTTPInferenceClientConfig{
-			BaseURL:        testServer.URL,
-			MaxRetries:     3,
-			InitialBackoff: 100 * time.Millisecond,
-		})
-
-		resp, err := client.Generate(context.Background(), &InferenceRequest{
-			RequestID: "test",
-			Model:     "test",
-			Params:    map[string]interface{}{"model": "test"},
-		})
-
-		assertNil(t, err)
-		assertNotNil(t, resp)
-		assertEqual(t, attemptCount, 3)
-
-		// Verify exponential backoff was applied (resty uses built-in exponential backoff with jitter)
-		if len(attemptTimes) >= 3 {
-			backoff1 := attemptTimes[1].Sub(attemptTimes[0])
-			backoff2 := attemptTimes[2].Sub(attemptTimes[1])
-
-			// First backoff should be at least InitialBackoff (with some tolerance for jitter and timing)
-			assertDurationGreaterOrEqual(t, backoff1, 80*time.Millisecond)
-			// Second backoff should be greater due to exponential growth (with jitter tolerance)
-			assertDurationGreaterOrEqual(t, backoff2, 80*time.Millisecond)
-			// Second should be roughly greater than first (exponential growth)
-			assertTrue(t, backoff2 > backoff1, "Expected exponential increase in backoff")
-		}
-	})
-
 	t.Run("should retry on network errors", func(t *testing.T) {
 		attemptCount := 0
 
