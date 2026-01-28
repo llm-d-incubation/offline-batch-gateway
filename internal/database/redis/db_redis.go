@@ -117,30 +117,30 @@ func (c *BatchDSClientRedis) GetContext(parentCtx context.Context, timeLimit tim
 	return context.WithTimeout(parentCtx, c.timeout)
 }
 
-func (c *BatchDSClientRedis) DBStore(ctx context.Context, job *db_api.BatchItem) (
+func (c *BatchDSClientRedis) DBStore(ctx context.Context, item *db_api.BatchItem) (
 	ID string, err error) {
 
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	logger := klog.FromContext(ctx)
-	if job == nil {
-		err = fmt.Errorf("empty batch job")
+	if item == nil {
+		err = fmt.Errorf("empty batch item")
 		logger.Error(err, "Store:")
 		return
 	}
-	if err = job.IsValid(); err != nil {
-		logger.Error(err, "Store: job is invalid")
+	if err = item.IsValid(); err != nil {
+		logger.Error(err, "Store: item is invalid")
 		return
 	}
-	logger = logger.WithValues("batchId", job.ID)
+	logger = logger.WithValues("batchId", item.ID)
 
 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 	res, err := redisScriptStore.Run(cctx, c.redisClient,
-		[]string{getKeyForStore(job.ID)},
-		versionV1, job.ID, strconv.FormatInt(job.SLO.UnixNano(), 10),
-		packTags(job.Tags), job.Status, job.Spec,
-		job.TTL).Text()
+		[]string{getKeyForStore(item.ID)},
+		versionV1, item.ID, strconv.FormatInt(item.SLO.UnixNano(), 10),
+		packTags(item.Tags), item.Status, item.Spec,
+		item.TTL).Text()
 	ccancel()
 	if err != nil {
 		logger.Error(err, "Store: script failed")
@@ -152,42 +152,42 @@ func (c *BatchDSClientRedis) DBStore(ctx context.Context, job *db_api.BatchItem)
 		return
 	}
 	logger.Info("Store: succeeded")
-	return job.ID, nil
+	return item.ID, nil
 }
 
-func (c *BatchDSClientRedis) DBUpdate(ctx context.Context, job *db_api.BatchItem) (err error) {
+func (c *BatchDSClientRedis) DBUpdate(ctx context.Context, item *db_api.BatchItem) (err error) {
 
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	logger := klog.FromContext(ctx)
-	if job == nil || len(job.ID) == 0 {
-		err = fmt.Errorf("empty or invalid batch job")
+	if item == nil || len(item.ID) == 0 {
+		err = fmt.Errorf("empty or invalid batch item")
 		logger.Error(err, "Update:")
 		return
 	}
-	logger = logger.WithValues("batchId", job.ID)
-	if len(job.Status) == 0 && len(job.Tags) == 0 {
+	logger = logger.WithValues("batchId", item.ID)
+	if len(item.Status) == 0 && len(item.Tags) == 0 {
 		logger.Info("Update: nothing to update")
 		return
 	}
 
-	// Update the job in the database.
+	// Update the item in the database.
 	updatedStatus, updatedTags := false, false
 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 	cmds, err := c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
 		switch {
-		case len(job.Status) > 0 && len(job.Tags) > 0:
-			pipe.HSet(cctx, getKeyForStore(job.ID),
-				fieldNameStatus, job.Status, fieldNameTags, packTags(job.Tags)).Err()
+		case len(item.Status) > 0 && len(item.Tags) > 0:
+			pipe.HSet(cctx, getKeyForStore(item.ID),
+				fieldNameStatus, item.Status, fieldNameTags, packTags(item.Tags)).Err()
 			updatedStatus, updatedTags = true, true
-		case len(job.Status) > 0:
-			pipe.HSet(cctx, getKeyForStore(job.ID),
-				fieldNameStatus, job.Status).Err()
+		case len(item.Status) > 0:
+			pipe.HSet(cctx, getKeyForStore(item.ID),
+				fieldNameStatus, item.Status).Err()
 			updatedStatus = true
-		case len(job.Tags) > 0:
-			pipe.HSet(cctx, getKeyForStore(job.ID),
-				fieldNameTags, packTags(job.Tags)).Err()
+		case len(item.Tags) > 0:
+			pipe.HSet(cctx, getKeyForStore(item.ID),
+				fieldNameTags, packTags(item.Tags)).Err()
 			updatedTags = true
 		}
 		return nil
@@ -217,7 +217,7 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 	}
 	logger := klog.FromContext(ctx)
 
-	// Delete the job records.
+	// Delete the item records.
 	resMap := make(map[string]*goredis.IntCmd)
 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 	cmds, err := c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
@@ -248,7 +248,7 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 		}
 	}
 
-	logger.Info("Delete:", "nJobs", len(deletedIDs), "IDs", deletedIDs)
+	logger.Info("Delete:", "nItems", len(deletedIDs), "IDs", deletedIDs)
 
 	return
 }
@@ -256,7 +256,7 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 func (c *BatchDSClientRedis) DBGet(
 	ctx context.Context, IDs []string, tags []string,
 	tagsLogicalCond db_api.TagsLogicalCond, includeStatic bool, start, limit int) (
-	jobs []*db_api.BatchItem, cursor int, err error) {
+	items []*db_api.BatchItem, cursor int, err error) {
 
 	if ctx == nil {
 		ctx = context.Background()
@@ -265,7 +265,7 @@ func (c *BatchDSClientRedis) DBGet(
 
 	if len(IDs) > 0 {
 
-		// Get the job records.
+		// Get the item records.
 		cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 		cmds, err := c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
 			for _, id := range IDs {
@@ -285,8 +285,8 @@ func (c *BatchDSClientRedis) DBGet(
 			return nil, 0, err
 		}
 
-		// Process the jobs.
-		jobs = make([]*db_api.BatchItem, 0, len(cmds))
+		// Process the items.
+		items = make([]*db_api.BatchItem, 0, len(cmds))
 		for _, cmd := range cmds {
 			if cmd.Err() != nil {
 				if cmd.Err() != goredis.Nil {
@@ -300,15 +300,15 @@ func (c *BatchDSClientRedis) DBGet(
 				logger.Error(err, "Get:")
 				return nil, 0, err
 			}
-			job, err := dbJobFromHget(hgetRes.Val(), includeStatic, logger)
+			item, err := dbItemFromHget(hgetRes.Val(), includeStatic, logger)
 			if err != nil {
 				return nil, 0, err
 			}
-			if job != nil {
-				jobs = append(jobs, job)
+			if item != nil {
+				items = append(items, item)
 			}
 		}
-		cursor = len(jobs)
+		cursor = len(items)
 
 	} else if len(tags) > 0 {
 
@@ -333,7 +333,7 @@ func (c *BatchDSClientRedis) DBGet(
 			logger.Error(err, "Get:")
 			return
 		}
-		resJobs, ok := res[1].([]interface{})
+		resItems, ok := res[1].([]interface{})
 		if !ok {
 			err = fmt.Errorf("unexpected result type from script: %T", res[1])
 			logger.Error(err, "Get:")
@@ -345,20 +345,20 @@ func (c *BatchDSClientRedis) DBGet(
 			logger.Error(err, "Get:")
 			return
 		}
-		jobs = make([]*db_api.BatchItem, 0, len(resJobs))
-		for _, resJob := range resJobs {
-			job, err := dbJobFromHget(resJob.([]interface{}), includeStatic, logger)
+		items = make([]*db_api.BatchItem, 0, len(resItems))
+		for _, resItem := range resItems {
+			item, err := dbItemFromHget(resItem.([]interface{}), includeStatic, logger)
 			if err != nil {
 				return nil, 0, err
 			}
-			if job != nil {
-				jobs = append(jobs, job)
+			if item != nil {
+				items = append(items, item)
 			}
 		}
 		cursor = int(resCursor)
 	}
 
-	logger.Info("Get: succeeded", "nJobs", len(jobs))
+	logger.Info("Get: succeeded", "nItems", len(items))
 
 	return
 }
@@ -396,11 +396,11 @@ func convertTags(tags []string) (ctags []string) {
 	return
 }
 
-func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (*db_api.BatchItem, error) {
+func dbItemFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (*db_api.BatchItem, error) {
 
 	if (includeStatic && len(vals) != 5) || (!includeStatic && len(vals) != 4) {
 		err := fmt.Errorf("unexpected result contents from HMGet: %v", vals)
-		logger.Error(err, "dbJobFromHget:")
+		logger.Error(err, "dbItemFromHget:")
 		return nil, err
 	}
 	var (
@@ -416,7 +416,7 @@ func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (
 	if ok && len(slo) > 0 {
 		sloNano, err := strconv.ParseInt(slo, 10, 64)
 		if err != nil {
-			logger.Error(err, "dbJobFromHget:")
+			logger.Error(err, "dbItemFromHget:")
 			return nil, err
 		}
 		sloTime = time.Unix(0, sloNano)
