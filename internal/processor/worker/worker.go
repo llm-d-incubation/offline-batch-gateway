@@ -179,7 +179,7 @@ func (p *Processor) RunPollingLoop(ctx context.Context) error {
 func (p *Processor) getTaskFromQueue(ctx context.Context) *db.BatchJobPriority {
 	logger := klog.FromContext(ctx)
 
-	tasks, err := p.clients.priorityQueue.Dequeue(ctx, 0, 1) // get only one job without blocking the queue
+	tasks, err := p.clients.priorityQueue.PQDequeue(ctx, 0, 1) // get only one job without blocking the queue
 	if err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to dequeue a batch job")
 		return nil
@@ -201,7 +201,7 @@ func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (
 
 	// get only one job data
 	ids := []string{task.ID}
-	jobs, _, err := p.clients.database.Get(ctx, ids, nil, db.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := p.clients.database.DBGet(ctx, ids, nil, db.TagsLogicalCondNa, true, 0, 1)
 
 	// job db data does not exist or failed to fetch the data
 	if err != nil || len(jobs) == 0 {
@@ -212,7 +212,7 @@ func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (
 		logger.V(logging.ERROR).Error(jobDataErr, "Failed to fetch detailed job info. re-queueing ID", "jobID", task.ID)
 
 		// can't process the job. put the task back to the queue.
-		if enqueueErr := p.clients.priorityQueue.Enqueue(ctx, task); enqueueErr != nil {
+		if enqueueErr := p.clients.priorityQueue.PQEnqueue(ctx, task); enqueueErr != nil {
 			logger.V(logging.ERROR).Error(enqueueErr, "CRITICAL: Failed to re-enqueue job", "jobID", task.ID)
 		}
 		return nil, jobDataErr

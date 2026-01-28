@@ -395,7 +395,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 			TTL:  c.config.BatchTTLSeconds,
 		},
 	}
-	c.eventClient.ProducerSendEvents(ctx, event)
+	c.eventClient.ECProducerSendEvents(ctx, event)
 
 	common.WriteJSONResponse(ctx, w, http.StatusOK, batch)
 }

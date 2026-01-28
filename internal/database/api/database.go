@@ -166,11 +166,11 @@ type BatchEventChannelClient interface {
 	// ConsumerGetChannel gets an events channel for the job ID, to be used by a consumer to listen for events.
 	// When the caller finishes processing a job - the caller must call the function CloseFn specified in BatchEventsChan,
 	// to close the associated resources.
-	ConsumerGetChannel(ctx context.Context, ID string) (batchEventsChan *BatchEventsChan, err error)
+	ECConsumerGetChannel(ctx context.Context, ID string) (batchEventsChan *BatchEventsChan, err error)
 
 	// ProducerSendEvents sends the specified events via associated event channels.
 	// The events are sent and consumed in FIFO order.
-	ProducerSendEvents(ctx context.Context, events []BatchEvent) (sentIDs []string, err error)
+	ECProducerSendEvents(ctx context.Context, events []BatchEvent) (sentIDs []string, err error)
 }
 
 // -- Batch jobs temporary status store --
