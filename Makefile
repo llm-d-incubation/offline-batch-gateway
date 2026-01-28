@@ -19,6 +19,7 @@ PROCESSOR_IMG = $(APISERVER_IMAGE_TAG_BASE):$(DEV_VERSION)
 GO=go
 GOFLAGS=
 LDFLAGS=-ldflags "-s -w"
+BENCHTIME ?= 1s
 
 CONTAINER_TOOL := $(shell (command -v docker >/dev/null 2>&1 && echo docker) || (command -v podman >/dev/null 2>&1 && echo podman) || echo "")
 BUILDER := $(shell command -v buildah >/dev/null 2>&1 && echo buildah || echo $(CONTAINER_TOOL))
@@ -113,10 +114,11 @@ test-coverage-func:
 	$(GO) test -coverprofile=coverage.out ./...
 	$(GO) tool cover -func=coverage.out
 
-## bench: Run benchmarks
+## bench: Run all benchmarks
+# make bench BENCHTIME=5s (use BENCHTIME=5s to override duration)
 bench:
-	@echo "Running benchmarks..."
-	$(GO) test -bench=. -benchmem ./...
+	@echo "Running benchmarks (benchtime=$(BENCHTIME))..."
+	$(GO) test -bench=. -benchmem -benchtime=$(BENCHTIME) ./...
 
 ## lint: Run golangci-lint
 lint:

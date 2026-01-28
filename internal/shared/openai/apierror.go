@@ -21,18 +21,19 @@ import (
 	"net/http"
 )
 
-type Error struct {
+// APIError represents an error that originates from the API
+type APIError struct {
 	Code    int     `json:"code,omitempty"`
 	Type    string  `json:"type"`
 	Message string  `json:"message"`
 	Param   *string `json:"param"`
 }
 
-func NewError(code int, errorType string, message string, param *string) Error {
+func NewAPIError(code int, errorType string, message string, param *string) APIError {
 	if errorType == "" {
 		errorType = ErrorCodeToType(code)
 	}
-	return Error{
+	return APIError{
 		Code:    code,
 		Type:    errorType,
 		Message: message,
@@ -41,7 +42,7 @@ func NewError(code int, errorType string, message string, param *string) Error {
 }
 
 type ErrorResponse struct {
-	Error Error `json:"error"`
+	Error APIError `json:"error"`
 }
 
 func ErrorCodeToType(code int) string {
