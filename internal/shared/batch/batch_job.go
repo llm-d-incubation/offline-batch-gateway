@@ -16,23 +16,33 @@ limitations under the License.
 
 package batch
 
-// Job represents a task polled from queue.
+import "time"
+
+// Job represents a batch job data from DB TODO:: job struct to use in processor.
+
+type Job struct {
+	ID             string            `json:"id"`
+	Location       string            `json:"location"`
+	SLO            time.Time         `json:"slo"`
+	ResultMetadata JobResultMetadata `json:"result_metadata"`
+}
+
+// Request represents a line in input jsonl file
 type Request struct {
-	RequestId   string
-	Model       string
-	ID          string
-	SLO         string
-	EndPoint    string
-	RequestBody []byte
-	Status      RequestStatus
+	RequestId   string        `json:"request_id"`
+	Model       string        `json:"model"`
+	JobID       string        `json:"job_id"`
+	EndPoint    string        `json:"end_point"`
+	RequestBody []byte        `json:"request_body"`
+	Status      RequestStatus `json:"status"`
 	//... other job fields
 }
 
 // JobResultMetadata
 type JobResultMetadata struct {
-	Total     int
-	Succeeded int
-	Failed    int
+	Total     int `json:"total"`
+	Succeeded int `json:"succeeded"`
+	Failed    int `json:"failed"`
 }
 
 func (rm JobResultMetadata) Validate() bool {
@@ -70,6 +80,7 @@ const (
 
 func (bs BatchStatus) String() string {
 	return [...]string{
+		"pending",
 		"validating",
 		"in_progress",
 		"finalizing",

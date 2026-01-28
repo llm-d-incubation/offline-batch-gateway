@@ -64,6 +64,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// metrics setup
+	if err := metrics.InitMetrics(*cfg); err != nil {
+		logger.V(logging.ERROR).Error(err, "Failed to initialize metrics")
+		os.Exit(1)
+	}
+	logger.V(logging.INFO).Info("Metrics initialized", "numWorkers", cfg.NumWorkers)
+
 	// setup context with graceful shutdown
 	ctx, cancel := interrupt.ContextWithSignal(ctx)
 	defer cancel()
@@ -77,7 +84,7 @@ func main() {
 		})
 
 		server := &http.Server{
-			Addr:    cfg.Port,
+			Addr:    cfg.Addr,
 			Handler: m,
 		}
 
@@ -103,7 +110,7 @@ func main() {
 			}
 		}()
 
-		logger.V(logging.INFO).Info("Start observability server", "port", cfg.Port, "tls", cfg.SSLEnabled())
+		logger.V(logging.INFO).Info("Start observability server", "port", cfg.Addr, "tls", cfg.SSLEnabled())
 
 		var err error
 		if cfg.SSLEnabled() {
@@ -131,7 +138,7 @@ func main() {
 	// initialize processor (worker pool manager)
 	// get max worker from cfg then decide the worker pool size
 	logger.V(logging.INFO).Info("Initializing worker processor", "maxWorkers", cfg.NumWorkers)
-	proc := worker.NewProcessor(cfg, processorClients)
+	proc := worker.NewProcessor(cfg, &processorClients)
 
 	// start the main polling loop
 	// this polls for new tasks, check for empty worker slots, and assign tasks to workers

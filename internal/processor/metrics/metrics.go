@@ -19,6 +19,7 @@ package metrics
 import (
 	"time"
 
+	"github.com/llm-d-incubation/batch-gateway/internal/processor/config"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -57,7 +58,16 @@ func GetSizeBucket(totalLines int) string {
 }
 
 var (
-	// number of jobs processed so far
+	jobsProcessed         *prometheus.CounterVec
+	jobProcessingDuration *prometheus.HistogramVec
+	jobQueueWaitDuration  *prometheus.HistogramVec
+	totalWorkers          prometheus.Gauge
+	activeWorkers         prometheus.Gauge
+	jobErrorsModelTotal   *prometheus.CounterVec
+)
+
+func InitMetrics(cfg config.ProcessorConfig) error {
+	// number of jobs processed : TODO:: add tenantID?
 	jobsProcessed = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_processed_total",
@@ -65,23 +75,15 @@ var (
 		}, []string{"result", "reason"},
 	)
 
-	// duration of job processing
-	jobProcessingDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name: "job_processing_duration_seconds",
-			Help: "Duration of job processing in seconds",
-			// Buckets -
-			// Bucket 1: ~ 0.1s
-			// Bucket 2: ~ 0.2s
-			// Bucket 3: ~ 0.4s
-			// Bucket 4: ~ 0.8s
-			// ...
-			// Bucket 13: ~ 409.6s (approx. 6.8m)
-			// Bucket 14: ~ 819.2s (approx. 13.6m)
-			// Bucket 15: ~ 1838.4  (approx. 27.3m)
-			Buckets: prometheus.ExponentialBuckets(0.1, 2, 15),
-		}, []string{"tenantID", "size_bucket"},
+	// total number of workers for utilization %
+	// this is set once on initialization
+	totalWorkers = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "total_workers",
+			Help: "Total number of configured workers",
+		},
 	)
+	totalWorkers.Set(float64(cfg.NumWorkers))
 
 	// current number of active workers
 	activeWorkers = prometheus.NewGauge(
@@ -99,24 +101,69 @@ var (
 		},
 		[]string{"model"},
 	)
-)
 
-func init() {
-	prometheus.MustRegister(jobsProcessed)
-	prometheus.MustRegister(jobProcessingDuration)
-	prometheus.MustRegister(activeWorkers)
-	prometheus.MustRegister(jobErrorsModelTotal)
+	// job processing duratino
+	jobProcessingDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "job_processing_duration_seconds",
+			Help: "Duration of job processing in seconds",
+			Buckets: prometheus.ExponentialBuckets(
+				cfg.ProcessTimeBucket.BucketStart,
+				cfg.ProcessTimeBucket.BucketFactor,
+				cfg.ProcessTimeBucket.BucketCount,
+			),
+		}, []string{"tenantID", "size_bucket"},
+	)
+
+	// duration of queue wait time
+	jobQueueWaitDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name: "job_queue_wait_duration",
+			Help: "Time spent in the priority queue before being picked up",
+			Buckets: prometheus.ExponentialBuckets(
+				cfg.QueueTimeBucket.BucketStart,
+				cfg.QueueTimeBucket.BucketFactor,
+				cfg.QueueTimeBucket.BucketCount,
+			),
+		}, []string{"tenantID"},
+	)
+
+	// metrics to register
+	metricsToRegister := []prometheus.Collector{
+		jobProcessingDuration,
+		jobQueueWaitDuration,
+		totalWorkers,
+		activeWorkers,
+		jobsProcessed,
+		jobErrorsModelTotal,
+	}
+
+	for _, metric := range metricsToRegister {
+		if err := prometheus.Register(metric); err != nil {
+			if _, ok := err.(prometheus.AlreadyRegisteredError); ok {
+				continue
+			}
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Recorder funcs
+
+// RecordQueueWait observes the queue time
+func RecordQueueWaitDuration(duration time.Duration, tenantID string) {
+	jobQueueWaitDuration.WithLabelValues(tenantID).Observe(duration.Seconds())
+}
 
 // RecordJobProcessed increments the total processed jobs count.
 func RecordJobProcessed(result string, reason string) {
 	jobsProcessed.WithLabelValues(result, reason).Inc()
 }
 
-// RecordJobDuration observes the time taken to process a job.
-func RecordJobDuration(duration time.Duration, tenantID string, sizeBucket string) {
+// RecordJobProcessingDuration observes the time taken to process a job.
+func RecordJobProcessingDuration(duration time.Duration, tenantID string, sizeBucket string) {
 	jobProcessingDuration.WithLabelValues(tenantID, sizeBucket).Observe(duration.Seconds())
 }
 

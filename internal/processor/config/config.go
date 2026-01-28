@@ -39,9 +39,21 @@ type ProcessorConfig struct {
 	// PollInterval defines how frequently the processor checks the database for new jobs
 	PollInterval time.Duration `yaml:"poll_interval"`
 
-	Port        string `yaml:"port"`
+	// QueueTimeBucket defines exponential bucket configs for queue wait time metric
+	QueueTimeBucket BucketConfig `yaml:"queue_time_bucket"`
+
+	// ProcessTimeBucket defines exponential bucket configs for process time metric
+	ProcessTimeBucket BucketConfig `yaml:"process_time_bucket"`
+
+	Addr        string `yaml:"addr"`
 	SSLCertFile string `yaml:"ssl_cert_file"`
 	SSLKeyFile  string `yaml:"ssl_key_file"`
+}
+
+type BucketConfig struct {
+	BucketStart  float64 `yaml:"bucket_start"`
+	BucketFactor float64 `yaml:"bucket_factor"`
+	BucketCount  int     `yaml:"bucket_count"`
 }
 
 func (pc *ProcessorConfig) SSLEnabled() bool {
@@ -69,10 +81,20 @@ func NewConfig() *ProcessorConfig {
 	return &ProcessorConfig{
 		PollInterval: 5 * time.Second,
 		TaskWaitTime: 1 * time.Second,
+		ProcessTimeBucket: BucketConfig{
+			BucketStart:  0.1,
+			BucketFactor: 2,
+			BucketCount:  15,
+		},
+		QueueTimeBucket: BucketConfig{
+			BucketStart:  0.1,
+			BucketFactor: 2,
+			BucketCount:  10,
+		},
 
 		MaxJobConcurrency: 10,
 		NumWorkers:        1,
-		Port:              ":9090",
+		Addr:              ":9090",
 	}
 }
 
