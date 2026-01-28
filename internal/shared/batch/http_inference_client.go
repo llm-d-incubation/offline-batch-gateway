@@ -18,6 +18,7 @@ package batch
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -40,6 +41,9 @@ type HTTPInferenceClientConfig struct {
 	MaxIdleConns    int           // Maximum idle connections (default: 100)
 	IdleConnTimeout time.Duration // Idle connection timeout (default: 90 seconds)
 	APIKey          string        // Optional API key for authentication
+
+	// TLS configuration (optional)
+	TLSInsecureSkipVerify bool // Skip TLS certificate verification (default: false - INSECURE, only for testing)
 
 	// Retry configuration (optional, set MaxRetries > 0 to enable)
 	// Uses resty's built-in exponential backoff with jitter
@@ -82,12 +86,24 @@ func NewHTTPInferenceClient(config HTTPInferenceClientConfig) *HTTPInferenceClie
 		client.SetAuthToken(config.APIKey)
 	}
 
-	// Configure transport for connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        config.MaxIdleConns,
-		MaxIdleConnsPerHost: config.MaxIdleConns,
-		IdleConnTimeout:     config.IdleConnTimeout,
+	// Configure transport - start with Go's secure defaults (http.DefaultTransport)
+	// This gives us: TLS 1.2+, system root CAs, certificate verification, proper timeouts
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	// Override only the settings we need to customize for batch processing
+	transport.MaxIdleConns = config.MaxIdleConns
+	transport.MaxIdleConnsPerHost = config.MaxIdleConns // Higher than default (17) for batch workloads
+	transport.IdleConnTimeout = config.IdleConnTimeout
+	transport.ResponseHeaderTimeout = 30 * time.Second // Prevent hanging on slow backends
+
+	// Only configure TLS if we need to skip verification (testing only)
+	if config.TLSInsecureSkipVerify {
+		transport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
 	}
+	// Otherwise, TLSClientConfig stays nil = Go uses system root CAs + TLS 1.2+ defaults
+
 	client.SetTransport(transport)
 
 	// Configure retry only if enabled

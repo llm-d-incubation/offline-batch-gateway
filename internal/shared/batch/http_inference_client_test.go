@@ -858,6 +858,45 @@ func TestRetryLogic(t *testing.T) {
 	})
 }
 
+func TestTLSConfiguration(t *testing.T) {
+	t.Run("should use secure TLS defaults when InsecureSkipVerify is false", func(t *testing.T) {
+		client := NewHTTPInferenceClient(HTTPInferenceClientConfig{
+			BaseURL:               "https://localhost:8000",
+			TLSInsecureSkipVerify: false, // Default: use system root CAs
+		})
+
+		assertNotNil(t, client)
+
+		// Access the underlying transport to verify TLS configuration
+		httpClient := client.client.GetClient()
+		transport, ok := httpClient.Transport.(*http.Transport)
+		assertTrue(t, ok, "expected *http.Transport")
+
+		// Note: Clone() creates a TLSClientConfig with default values
+		// Verify certificate verification is enabled (InsecureSkipVerify = false)
+		assertNotNil(t, transport.TLSClientConfig, "TLSClientConfig should exist")
+		assertFalse(t, transport.TLSClientConfig.InsecureSkipVerify, "Certificate verification should be enabled")
+	})
+
+	t.Run("should disable certificate verification when InsecureSkipVerify is true", func(t *testing.T) {
+		client := NewHTTPInferenceClient(HTTPInferenceClientConfig{
+			BaseURL:               "https://localhost:8443",
+			TLSInsecureSkipVerify: true, // Skip cert verification for testing
+		})
+
+		assertNotNil(t, client)
+
+		// Access the underlying transport to verify TLS configuration
+		httpClient := client.client.GetClient()
+		transport, ok := httpClient.Transport.(*http.Transport)
+		assertTrue(t, ok, "expected *http.Transport")
+
+		// Verify InsecureSkipVerify is actually set to true
+		assertNotNil(t, transport.TLSClientConfig, "TLSClientConfig should be set")
+		assertTrue(t, transport.TLSClientConfig.InsecureSkipVerify, "InsecureSkipVerify should be true")
+	})
+}
+
 func TestAuthentication(t *testing.T) {
 	t.Run("should include API key in Authorization header", func(t *testing.T) {
 		var authHeader string
