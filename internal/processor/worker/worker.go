@@ -159,7 +159,7 @@ func (p *Processor) RunPollingLoop(ctx context.Context) error {
 		// TODO:: metrics.RecordQueueWait(time.Since(task.EnqueuedAt), tenantID)
 
 		// process job
-		go func(wid int, j *db.BatchJob) {
+		go func(wid int, j *db.BatchItem) {
 			defer func() {
 				if r := recover(); r != nil {
 					recoverErr := fmt.Errorf("%v", r)
@@ -196,7 +196,7 @@ func (p *Processor) getTaskFromQueue(ctx context.Context) *db.BatchJobPriority {
 }
 
 // getJobData gets job's db data
-func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (*db.BatchJob, error) {
+func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (*db.BatchItem, error) {
 	logger := klog.FromContext(ctx)
 
 	// get only one job data
@@ -232,7 +232,7 @@ func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (
 // TODO:: add output file writing (output file writing)
 // TODO:: add output file reading (output file reading)
 // TODO:: add output file closing (output file closing)
-func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJob) {
+func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchItem) {
 	// logger and ctx
 	logger := klog.FromContext(ctx).WithValues("jobID", job.ID, "workerID", workerId)
 	jobctx := klog.NewContext(ctx, logger)

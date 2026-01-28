@@ -117,7 +117,7 @@ func (c *BatchDSClientRedis) GetContext(parentCtx context.Context, timeLimit tim
 	return context.WithTimeout(parentCtx, c.timeout)
 }
 
-func (c *BatchDSClientRedis) Store(ctx context.Context, job *db_api.BatchJob) (
+func (c *BatchDSClientRedis) DBStore(ctx context.Context, job *db_api.BatchItem) (
 	ID string, err error) {
 
 	if ctx == nil {
@@ -155,7 +155,7 @@ func (c *BatchDSClientRedis) Store(ctx context.Context, job *db_api.BatchJob) (
 	return job.ID, nil
 }
 
-func (c *BatchDSClientRedis) Update(ctx context.Context, job *db_api.BatchJob) (err error) {
+func (c *BatchDSClientRedis) DBUpdate(ctx context.Context, job *db_api.BatchItem) (err error) {
 
 	if ctx == nil {
 		ctx = context.Background()
@@ -209,7 +209,7 @@ func (c *BatchDSClientRedis) Update(ctx context.Context, job *db_api.BatchJob) (
 	return
 }
 
-func (c *BatchDSClientRedis) Delete(ctx context.Context, IDs []string) (
+func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 	deletedIDs []string, err error) {
 
 	if ctx == nil {
@@ -253,10 +253,10 @@ func (c *BatchDSClientRedis) Delete(ctx context.Context, IDs []string) (
 	return
 }
 
-func (c *BatchDSClientRedis) Get(
+func (c *BatchDSClientRedis) DBGet(
 	ctx context.Context, IDs []string, tags []string,
 	tagsLogicalCond db_api.TagsLogicalCond, includeStatic bool, start, limit int) (
-	jobs []*db_api.BatchJob, cursor int, err error) {
+	jobs []*db_api.BatchItem, cursor int, err error) {
 
 	if ctx == nil {
 		ctx = context.Background()
@@ -286,7 +286,7 @@ func (c *BatchDSClientRedis) Get(
 		}
 
 		// Process the jobs.
-		jobs = make([]*db_api.BatchJob, 0, len(cmds))
+		jobs = make([]*db_api.BatchItem, 0, len(cmds))
 		for _, cmd := range cmds {
 			if cmd.Err() != nil {
 				if cmd.Err() != goredis.Nil {
@@ -345,7 +345,7 @@ func (c *BatchDSClientRedis) Get(
 			logger.Error(err, "Get:")
 			return
 		}
-		jobs = make([]*db_api.BatchJob, 0, len(resJobs))
+		jobs = make([]*db_api.BatchItem, 0, len(resJobs))
 		for _, resJob := range resJobs {
 			job, err := dbJobFromHget(resJob.([]interface{}), includeStatic, logger)
 			if err != nil {
@@ -396,7 +396,7 @@ func convertTags(tags []string) (ctags []string) {
 	return
 }
 
-func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (*db_api.BatchJob, error) {
+func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (*db_api.BatchItem, error) {
 
 	if (includeStatic && len(vals) != 5) || (!includeStatic && len(vals) != 4) {
 		err := fmt.Errorf("unexpected result contents from HMGet: %v", vals)
@@ -435,7 +435,7 @@ func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (
 			spec = ""
 		}
 	}
-	job := &db_api.BatchJob{
+	job := &db_api.BatchItem{
 		ID:     id,
 		SLO:    sloTime,
 		Spec:   []byte(spec),
@@ -445,18 +445,18 @@ func dbJobFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) (
 	return job, nil
 }
 
-func (c *BatchDSClientRedis) Enqueue(ctx context.Context, jobPriority *db_api.BatchJobPriority) (err error) {
+func (c *BatchDSClientRedis) PQEnqueue(ctx context.Context, jobPriority *db_api.BatchJobPriority) (err error) {
 	return
 }
 
-func (c *BatchDSClientRedis) Dequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
+func (c *BatchDSClientRedis) PQDequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
 	jobPriorities []*db_api.BatchJobPriority, err error) {
 	return
 }
 
-// func (c *BatchDSClientRedis) Delete(ctx context.Context, jobPriority *db_api.BatchJobPriority) (nDeleted int, err error) {
-// 	return
-// }
+func (c *BatchDSClientRedis) PQDelete(ctx context.Context, jobPriority *db_api.BatchJobPriority) (nDeleted int, err error) {
+	return
+}
 
 // if addJobToQueue {
 // 	item := goredis.Z{

@@ -28,59 +28,59 @@ import (
 
 // -- Batch jobs metadata store --
 
-type BatchJob struct {
-	ID     string    // [mandatory, immutable, returned by get, parsed by DB, must be unique] User provided unique ID of the job. This ID must be unique.
-	SLO    time.Time // [mandatory, immutable, returned by get, parsed by DB] The time based on which the job should be prioritized relative to other jobs.
+type BatchItem struct {
+	ID     string    // [mandatory, immutable, returned by get, parsed by DB, must be unique] User provided unique ID of the item. This ID must be unique.
+	SLO    time.Time // [mandatory, immutable, returned by get, parsed by DB] The time based on which the item should be prioritized relative to other items.
 	TTL    int       // [mandatory, immutable, not returned by get, parsed by DB] The number of seconds to set for the TTL of the DB record.
-	Tags   []string  // [optional, updatable, returned by get, parsed by DB] A list of tags that enable to select jobs based on the tags' contents. The tags must not contain ';;', which is the separator.
-	Spec   []byte    // [optional, immutable, returned optionally by get, opaque to DB] The static part of the batch job (serialized), including the job's specification.
-	Status []byte    // [optional, updatable, returned by get, opaque to DB] The dynamic part of the batch job (serialized), including its status.
+	Tags   []string  // [optional, updatable, returned by get, parsed by DB] A list of tags that enable to select items based on the tags' contents. The tags must not contain ';;', which is the separator.
+	Spec   []byte    // [optional, immutable, returned optionally by get, opaque to DB] The static part of the batch item (serialized), including the item's specification.
+	Status []byte    // [optional, updatable, returned by get, opaque to DB] The dynamic part of the batch item (serialized), including its status.
 }
 
-func (bj *BatchJob) IsValid() error {
+func (bj *BatchItem) IsValid() error {
 	if len(bj.ID) == 0 {
 		return fmt.Errorf("ID is empty")
 	}
-	if bj.SLO.IsZero() {
-		return fmt.Errorf("SLO is zero for ID %s", bj.ID)
-	}
+	// if bj.SLO.IsZero() { TBD
+	// 	return fmt.Errorf("SLO is zero for ID %s", bj.ID)
+	// }
 	if bj.TTL <= 0 {
 		return fmt.Errorf("TTL is invalid for ID %s", bj.ID)
 	}
 	return nil
 }
 
-// BatchDBClient enables to manage batch job metadata objects in persistent storage.
+// BatchDBClient enables to manage batch item metadata objects in persistent storage.
 type BatchDBClient interface {
 	store.BatchClientAdmin
 
-	// DBStore stores a batch job metadata object.
-	// Returns the ID of the job in the database.
-	DBStore(ctx context.Context, job *BatchJob) (ID string, err error)
+	// DBStore stores a batch item metadata object.
+	// Returns the ID of the item in the database.
+	DBStore(ctx context.Context, item *BatchItem) (ID string, err error)
 
-	// DBGet gets the information (static and dynamic) of batch jobs.
-	// If IDs are specified, this function will get jobs by the specified IDs.
-	// If tags are specified, this function will get jobs by the specified tags.
-	// If no IDs nor tags are specified, the function will return an empty list of jobs.
-	// tagsLogicalCond specifies the logical condition to use for when searching for the tags per job.
-	// includeStatic specifies if to include the static part of a job in the returned output.
+	// DBGet gets the information (static and dynamic) of batch items.
+	// If IDs are specified, this function will get items by the specified IDs.
+	// If tags are specified, this function will get items by the specified tags.
+	// If no IDs nor tags are specified, the function will return an empty list of items.
+	// tagsLogicalCond specifies the logical condition to use for when searching for the tags per item.
+	// includeStatic specifies if to include the static part of a item in the returned output.
 	// start and limit specify the pagination details. This is relevant only for search by tags.
 	// In the first iteration with pagination specify 0 for 'start', and in any subsequent iteration specify in 'start'
 	// the value that was returned by 'cursor' in the previous iteration. The value returned by 'cursor' is an opaque integer.
 	// The value specified in 'limit' can be different between iterations, and is a recommendation only.
-	// jobs is a slice of returned jobs.
+	// items is a slice of returned items.
 	// cursor is an opaque integer that should be given in the next paginated call via the 'start' parameter.
 	DBGet(ctx context.Context, IDs []string, tags []string, tagsLogicalCond TagsLogicalCond,
 		includeStatic bool, start, limit int) (
-		jobs []*BatchJob, cursor int, err error)
+		items []*BatchItem, cursor int, err error)
 
-	// DBUpdate updates the dynamic parts of a batch job.
-	// The function will update in the job's record in the database - all the dynamic fields of the job which are not empty
-	// in the given job object.
-	// Any dynamic field that is empty in the given job object - will not be updated in the job's record in the database.
-	DBUpdate(ctx context.Context, job *BatchJob) (err error)
+	// DBUpdate updates the dynamic parts of a batch item.
+	// The function will update in the item's record in the database - all the dynamic fields of the item which are not empty
+	// in the given item object.
+	// Any dynamic field that is empty in the given item object - will not be updated in the item's record in the database.
+	DBUpdate(ctx context.Context, item *BatchItem) (err error)
 
-	// DBDelete deletes batch jobs.
+	// DBDelete deletes batch items.
 	DBDelete(ctx context.Context, IDs []string) (deletedIDs []string, err error)
 }
 
@@ -101,9 +101,10 @@ var TagsLogicalCondNames = map[TagsLogicalCond]string{
 // -- Batch jobs priority queue --
 
 type BatchJobPriority struct {
-	ID         string    // ID of the batch job.
-	SLO        time.Time // The SLO value determines the priority of the job.
-	EnqueuedAt time.Time // The time when the item was enqueued.
+	ID   string    // ID of the batch job.
+	SLO  time.Time // The SLO value determines the priority of the job.
+	TTL  int       // TTL in seconds for the record.
+	Data []byte    // User defined data.
 }
 
 // BatchPriorityQueueClient enables to perform operations on a priority queue of jobs.

@@ -37,7 +37,7 @@ const (
 	pathParamAfter   = "after"
 )
 
-func jobToBatch(job *api.BatchJob) (*openai.Batch, error) {
+func jobToBatch(job *api.BatchItem) (*openai.Batch, error) {
 	batch := &openai.Batch{
 		ID: job.ID,
 	}
@@ -163,7 +163,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	job := &api.BatchJob{
+	job := &api.BatchItem{
 		ID:     batchID,
 		SLO:    slo,
 		TTL:    ttl,
