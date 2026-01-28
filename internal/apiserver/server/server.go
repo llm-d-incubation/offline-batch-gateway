@@ -31,6 +31,7 @@ import (
 	"github.com/llm-d-incubation/batch-gateway/internal/apiserver/health"
 	"github.com/llm-d-incubation/batch-gateway/internal/apiserver/metrics"
 	"github.com/llm-d-incubation/batch-gateway/internal/apiserver/middleware"
+	mockapi "github.com/llm-d-incubation/batch-gateway/internal/database/mock"
 	"k8s.io/klog/v2"
 )
 
@@ -43,7 +44,7 @@ func New(config *common.ServerConfig) (*Server, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
-	logger := klog.Background().WithName("api server")
+	logger := klog.Background().WithName("api_server")
 	return &Server{config: config, logger: logger}, nil
 }
 
@@ -120,11 +121,17 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) buildHandler() http.Handler {
 	mux := http.NewServeMux()
 
+	// TODO: change to actual implementation
+	dbClient := mockapi.NewMockBatchDBClient()
+	eventClient := mockapi.NewMockBatchEventChannelClient()
+	queueClient := mockapi.NewMockBatchPriorityQueueClient()
+	statusClient := mockapi.NewMockBatchStatusClient()
+
 	// register handlers
 	healthHandler := health.NewHealthApiHandler()
 	metricsHandler := metrics.NewMetricsApiHandler()
 	filesHandler := files.NewFilesApiHandler()
-	batchHandler := batch.NewBatchApiHandler()
+	batchHandler := batch.NewBatchApiHandler(s.config, dbClient, queueClient, eventClient, statusClient)
 
 	handlers := []common.ApiHandler{
 		healthHandler,

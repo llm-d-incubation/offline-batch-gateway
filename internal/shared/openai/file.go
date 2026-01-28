@@ -19,32 +19,58 @@ package openai
 
 // https://platform.openai.com/docs/api-reference/files
 
-// File - The `File` object represents a document that has been uploaded to OpenAI.
-type File struct {
+// The intended purpose of the file. Supported values are `assistants`,
+// `assistants_output`, `batch`, `batch_output`, `fine-tune`, `fine-tune-results`,
+// `vision`, and `user_data`.
+type FileObjectPurpose string
 
-	// The file identifier, which can be referenced in the API endpoints.
+const (
+	FileObjectPurposeAssistants       FileObjectPurpose = "assistants"
+	FileObjectPurposeAssistantsOutput FileObjectPurpose = "assistants_output"
+	FileObjectPurposeBatch            FileObjectPurpose = "batch"
+	FileObjectPurposeBatchOutput      FileObjectPurpose = "batch_output"
+	FileObjectPurposeFineTune         FileObjectPurpose = "fine-tune"
+	FileObjectPurposeFineTuneResults  FileObjectPurpose = "fine-tune-results"
+	FileObjectPurposeVision           FileObjectPurpose = "vision"
+	FileObjectPurposeUserData         FileObjectPurpose = "user_data"
+)
+
+// Deprecated. The current status of the file, which can be either `uploaded`,
+// `processed`, or `error`.
+type FileObjectStatus string
+
+const (
+	FileObjectStatusUploaded  FileObjectStatus = "uploaded"
+	FileObjectStatusProcessed FileObjectStatus = "processed"
+	FileObjectStatusError     FileObjectStatus = "error"
+)
+
+// File - The `FileObject` represents a document that has been uploaded to OpenAI.
+type FileObject struct {
+
+	// required. The file identifier, which can be referenced in the API endpoints.
 	ID string `json:"id"`
 
-	// The size of the file, in bytes.
+	// required. The size of the file, in bytes.
 	Bytes int32 `json:"bytes"`
 
-	// The Unix timestamp (in seconds) for when the file was created.
+	// required. The Unix timestamp (in seconds) for when the file was created.
 	CreatedAt int32 `json:"created_at"`
 
 	// The Unix timestamp (in seconds) for when the file will expire.
-	ExpiresAt int32 `json:"expires_at,omitempty"`
+	ExpiresAt int32 `json:"expires_at"`
 
-	// The name of the file.
+	// required. The name of the file.
 	Filename string `json:"filename"`
 
-	// The object type, which is always `file`.
+	// required. The object type, which is always `file`.
 	Object string `json:"object"`
 
-	// The intended purpose of the file. Supported values are `assistants`, `assistants_output`, `batch`, `batch_output`, `fine-tune`, `fine-tune-results` and `vision`.
-	Purpose string `json:"purpose"`
+	// required. The intended purpose of the file. Supported values are `assistants`, `assistants_output`, `batch`, `batch_output`, `fine-tune`, `fine-tune-results` and `vision`.
+	Purpose FileObjectPurpose `json:"purpose"`
 
 	// Deprecated. The current status of the file, which can be either `uploaded`, `processed`, or `error`.
-	Status string `json:"status"`
+	Status FileObjectStatus `json:"status,omitempty"`
 
 	// Deprecated. For details on why a fine-tuning training file failed validation, see the `error` field on `fine_tuning.job`.
 	StatusDetails string `json:"status_details,omitempty"`
