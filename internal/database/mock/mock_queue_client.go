@@ -37,7 +37,7 @@ func NewMockBatchPriorityQueueClient() *MockBatchPriorityQueueClient {
 	}
 }
 
-func (m *MockBatchPriorityQueueClient) Enqueue(ctx context.Context, jobPriority *api.BatchJobPriority) error {
+func (m *MockBatchPriorityQueueClient) PQEnqueue(ctx context.Context, jobPriority *api.BatchJobPriority) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -58,7 +58,7 @@ func (m *MockBatchPriorityQueueClient) Enqueue(ctx context.Context, jobPriority 
 	return nil
 }
 
-func (m *MockBatchPriorityQueueClient) Dequeue(ctx context.Context, timeout time.Duration, maxObjs int) ([]*api.BatchJobPriority, error) {
+func (m *MockBatchPriorityQueueClient) PQDequeue(ctx context.Context, timeout time.Duration, maxObjs int) ([]*api.BatchJobPriority, error) {
 	deadline := time.Now().Add(timeout)
 
 	for {
@@ -99,7 +99,7 @@ func (m *MockBatchPriorityQueueClient) Dequeue(ctx context.Context, timeout time
 	}
 }
 
-func (m *MockBatchPriorityQueueClient) Delete(ctx context.Context, jobPriority *api.BatchJobPriority) (nDeleted int, err error) {
+func (m *MockBatchPriorityQueueClient) PQDelete(ctx context.Context, jobPriority *api.BatchJobPriority) (nDeleted int, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

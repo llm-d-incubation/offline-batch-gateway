@@ -172,7 +172,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		Status: batchStatusData,
 	}
 
-	_, err = c.dbClient.Store(ctx, job)
+	_, err = c.dbClient.DBStore(ctx, job)
 	if err != nil {
 		logger.Error(err, "failed to store batch job")
 		common.WriteInternalServerError(ctx, w)
@@ -184,7 +184,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		ID:  batchID,
 		SLO: slo,
 	}
-	if err := c.queueClient.Enqueue(ctx, bjp); err != nil {
+	if err := c.queueClient.PQEnqueue(ctx, bjp); err != nil {
 		logger.Error(err, "failed to enqueue batch job priority")
 		common.WriteInternalServerError(ctx, w)
 		return
@@ -242,7 +242,7 @@ func (c *BatchApiHandler) ListBatches(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: We need a way to associate jobs to a tenant / user
 	// Request limit+1 to check if there are more results
-	jobs, _, err := c.dbClient.Get(ctx, nil, nil, api.TagsLogicalCondNa, true, after, limit+1)
+	jobs, _, err := c.dbClient.DBGet(ctx, nil, nil, api.TagsLogicalCondNa, true, after, limit+1)
 	if err != nil {
 		logger.Error(err, "failed to list batches from database")
 		common.WriteInternalServerError(ctx, w)
@@ -295,7 +295,7 @@ func (c *BatchApiHandler) RetrieveBatch(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Get batch from database
-	jobs, _, err := c.dbClient.Get(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := c.dbClient.DBGet(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
 	if err != nil {
 		logger.Error(err, "failed to get batch from database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -333,7 +333,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get batch from database
-	jobs, _, err := c.dbClient.Get(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := c.dbClient.DBGet(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
 	if err != nil {
 		logger.Error(err, "failed to get batch from database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -375,7 +375,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job.Status = updatedStatusData
-	if err := c.dbClient.Update(ctx, job); err != nil {
+	if err := c.dbClient.DBUpdate(ctx, job); err != nil {
 		logger.Error(err, "failed to update batch in database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
 		return
@@ -385,7 +385,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	jobPriority := &api.BatchJobPriority{
 		ID: batchID,
 	}
-	c.queueClient.Delete(ctx, jobPriority)
+	c.queueClient.PQDelete(ctx, jobPriority)
 
 	// Send a cancel event on the event channel associated with the job.
 	event := []api.BatchEvent{

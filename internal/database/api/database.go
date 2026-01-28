@@ -54,11 +54,11 @@ func (bj *BatchJob) IsValid() error {
 type BatchDBClient interface {
 	store.BatchClientAdmin
 
-	// Store stores a batch job metadata object.
+	// DBStore stores a batch job metadata object.
 	// Returns the ID of the job in the database.
-	Store(ctx context.Context, job *BatchJob) (ID string, err error)
+	DBStore(ctx context.Context, job *BatchJob) (ID string, err error)
 
-	// Get gets the information (static and dynamic) of batch jobs.
+	// DBGet gets the information (static and dynamic) of batch jobs.
 	// If IDs are specified, this function will get jobs by the specified IDs.
 	// If tags are specified, this function will get jobs by the specified tags.
 	// If no IDs nor tags are specified, the function will return an empty list of jobs.
@@ -70,18 +70,18 @@ type BatchDBClient interface {
 	// The value specified in 'limit' can be different between iterations, and is a recommendation only.
 	// jobs is a slice of returned jobs.
 	// cursor is an opaque integer that should be given in the next paginated call via the 'start' parameter.
-	Get(ctx context.Context, IDs []string, tags []string, tagsLogicalCond TagsLogicalCond,
+	DBGet(ctx context.Context, IDs []string, tags []string, tagsLogicalCond TagsLogicalCond,
 		includeStatic bool, start, limit int) (
 		jobs []*BatchJob, cursor int, err error)
 
-	// Update updates the dynamic parts of a batch job.
+	// DBUpdate updates the dynamic parts of a batch job.
 	// The function will update in the job's record in the database - all the dynamic fields of the job which are not empty
 	// in the given job object.
 	// Any dynamic field that is empty in the given job object - will not be updated in the job's record in the database.
-	Update(ctx context.Context, job *BatchJob) (err error)
+	DBUpdate(ctx context.Context, job *BatchJob) (err error)
 
-	// Delete deletes batch jobs.
-	Delete(ctx context.Context, IDs []string) (deletedIDs []string, err error)
+	// DBDelete deletes batch jobs.
+	DBDelete(ctx context.Context, IDs []string) (deletedIDs []string, err error)
 }
 
 type TagsLogicalCond int
@@ -109,18 +109,18 @@ type BatchJobPriority struct {
 type BatchPriorityQueueClient interface {
 	store.BatchClientAdmin
 
-	// Enqueue adds a job priority object to the queue.
-	Enqueue(ctx context.Context, jobPriority *BatchJobPriority) (err error)
+	// PQEnqueue adds a job priority object to the queue.
+	PQEnqueue(ctx context.Context, jobPriority *BatchJobPriority) (err error)
 
-	// Dequeue returns the job priority objects at the head of the queue,
+	// PQDequeue returns the job priority objects at the head of the queue,
 	// up to the maximum number of objects specified in maxObjs.
 	// The function blocks up to the timeout value for a job priority object to be available.
 	// If the timeout value is zero, the function returns immediately.
-	Dequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
+	PQDequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
 		jobPriorities []*BatchJobPriority, err error)
 
-	// Delete deletes a job priority object from the queue.
-	Delete(ctx context.Context, jobPriority *BatchJobPriority) (nDeleted int, err error)
+	// PQDelete deletes a job priority object from the queue.
+	PQDelete(ctx context.Context, jobPriority *BatchJobPriority) (nDeleted int, err error)
 }
 
 // -- Batch jobs events and channels --
