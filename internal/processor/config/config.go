@@ -60,12 +60,6 @@ type ProcessorConfig struct {
 
 	// InferenceMaxBackoff is the maximum backoff duration for retries
 	InferenceMaxBackoff time.Duration `yaml:"inference_max_backoff"`
-
-	// InferenceBackoffFactor is the exponential backoff multiplier (e.g., 2.0 doubles each retry)
-	InferenceBackoffFactor float64 `yaml:"inference_backoff_factor"`
-
-	// InferenceJitterFraction is the random jitter as fraction of backoff (e.g., 0.1 = ±10%)
-	InferenceJitterFraction float64 `yaml:"inference_jitter_fraction"`
 }
 
 func (pc *ProcessorConfig) SSLEnabled() bool {
@@ -104,8 +98,6 @@ func NewConfig() *ProcessorConfig {
 		InferenceMaxRetries:     3,
 		InferenceInitialBackoff: 1 * time.Second,
 		InferenceMaxBackoff:     60 * time.Second,
-		InferenceBackoffFactor:  2.0, // Double backoff each retry (industry standard)
-		InferenceJitterFraction: 0.1, // ±10% jitter to prevent thundering herd
 	}
 }
 
