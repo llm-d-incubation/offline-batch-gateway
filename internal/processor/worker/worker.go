@@ -248,7 +248,7 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 		jobFailureReason := metrics.ReasonUnknown
 		jobResult := metrics.ResultSuccess
 
-		metrics.RecordJobDuration(time.Since(startTime), tenantID, metrics.GetSizeBucket(metadata.Total))
+		metrics.RecordJobProcessingDuration(time.Since(startTime), tenantID, metrics.GetSizeBucket(metadata.Total))
 		metrics.RecordJobProcessed(jobResult, jobFailureReason)
 	}()
 
