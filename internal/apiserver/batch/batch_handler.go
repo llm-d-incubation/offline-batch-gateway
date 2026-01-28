@@ -385,7 +385,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	jobPriority := &api.BatchJobPriority{
 		ID: batchID,
 	}
-	c.queueClient.Remove(ctx, jobPriority)
+	c.queueClient.Delete(ctx, jobPriority)
 
 	// Send a cancel event on the event channel associated with the job.
 	event := []api.BatchEvent{

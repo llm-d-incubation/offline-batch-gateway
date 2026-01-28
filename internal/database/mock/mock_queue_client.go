@@ -99,7 +99,7 @@ func (m *MockBatchPriorityQueueClient) Dequeue(ctx context.Context, timeout time
 	}
 }
 
-func (m *MockBatchPriorityQueueClient) Remove(ctx context.Context, jobPriority *api.BatchJobPriority) error {
+func (m *MockBatchPriorityQueueClient) Delete(ctx context.Context, jobPriority *api.BatchJobPriority) (nDeleted int, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -107,11 +107,11 @@ func (m *MockBatchPriorityQueueClient) Remove(ctx context.Context, jobPriority *
 		if jp.ID == jobPriority.ID {
 			// Remove the item
 			m.queue = append(m.queue[:i], m.queue[i+1:]...)
-			return nil
+			return 1, nil
 		}
 	}
 
-	return fmt.Errorf("job with ID '%s' not found in queue", jobPriority.ID)
+	return 0, fmt.Errorf("job with ID '%s' not found in queue", jobPriority.ID)
 }
 
 func (m *MockBatchPriorityQueueClient) GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc) {

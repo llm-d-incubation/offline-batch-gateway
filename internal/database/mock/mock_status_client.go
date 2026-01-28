@@ -67,13 +67,13 @@ func (m *MockBatchStatusClient) Get(ctx context.Context, ID string) ([]byte, err
 	return dataCopy, nil
 }
 
-func (m *MockBatchStatusClient) Delete(ctx context.Context, ID string) error {
+func (m *MockBatchStatusClient) Delete(ctx context.Context, ID string) (nDeleted int, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	delete(m.status, ID)
 
-	return nil
+	return 1, nil
 }
 
 func (m *MockBatchStatusClient) GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc) {
