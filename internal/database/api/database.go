@@ -110,7 +110,7 @@ type BatchPriorityQueueClient interface {
 	store.BatchClientAdmin
 
 	// Enqueue adds a job priority object to the queue.
-	Enqueue(ctx context.Context, jobPriority *BatchJobPriority) error
+	Enqueue(ctx context.Context, jobPriority *BatchJobPriority) (err error)
 
 	// Dequeue returns the job priority objects at the head of the queue,
 	// up to the maximum number of objects specified in maxObjs.
@@ -119,8 +119,8 @@ type BatchPriorityQueueClient interface {
 	Dequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
 		jobPriorities []*BatchJobPriority, err error)
 
-	// Remove deletes a job priority object from the queue.
-	Remove(ctx context.Context, jobPriority *BatchJobPriority) error
+	// Delete deletes a job priority object from the queue.
+	Delete(ctx context.Context, jobPriority *BatchJobPriority) (nDeleted int, err error)
 }
 
 // -- Batch jobs events and channels --
@@ -180,12 +180,12 @@ type BatchStatusClient interface {
 	store.BatchClientAdmin
 
 	// Set stores or updates status data for a job.
-	Set(ctx context.Context, ID string, TTL int, data []byte) error
+	Set(ctx context.Context, ID string, TTL int, data []byte) (err error)
 
 	// Get retrieves the status data of a job.
 	// If no data exists (nil, nil) is returned.
 	Get(ctx context.Context, ID string) (data []byte, err error)
 
-	// Delete removes the status data for a job.
-	Delete(ctx context.Context, ID string) error
+	// Delete deletes the status data for a job.
+	Delete(ctx context.Context, ID string) (nDeleted int, err error)
 }
