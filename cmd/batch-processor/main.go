@@ -123,7 +123,21 @@ func main() {
 	var pqClient db.BatchPriorityQueueClient
 	var statusClient db.BatchStatusClient
 	var eventClient db.BatchEventChannelClient
-	var inferenceClient batch.InferenceClient
+
+	// Initialize inference client with configuration
+	inferenceClient := batch.NewHTTPInferenceClient(batch.HTTPInferenceClientConfig{
+		BaseURL:        cfg.InferenceGatewayURL,
+		Timeout:        cfg.InferenceRequestTimeout,
+		APIKey:         cfg.InferenceAPIKey,
+		MaxRetries:     cfg.InferenceMaxRetries,
+		InitialBackoff: cfg.InferenceInitialBackoff,
+		MaxBackoff:     cfg.InferenceMaxBackoff,
+	})
+	logger.V(logging.INFO).Info("Initialized inference client",
+		"baseURL", cfg.InferenceGatewayURL,
+		"timeout", cfg.InferenceRequestTimeout,
+		"maxRetries", cfg.InferenceMaxRetries)
+
 	processorClients := worker.NewProcessorClients(
 		dbClient, pqClient, statusClient, eventClient, inferenceClient,
 	)
