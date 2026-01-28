@@ -101,8 +101,9 @@ var TagsLogicalCondNames = map[TagsLogicalCond]string{
 // -- Batch jobs priority queue --
 
 type BatchJobPriority struct {
-	ID  string    // ID of the batch job.
-	SLO time.Time // The SLO value determines the priority of the job.
+	ID         string    // ID of the batch job.
+	SLO        time.Time // The SLO value determines the priority of the job.
+	EnqueuedAt time.Time // The time when the item was enqueued.
 }
 
 // BatchPriorityQueueClient enables to perform operations on a priority queue of jobs.
@@ -163,12 +164,12 @@ type BatchEventsChan struct {
 type BatchEventChannelClient interface {
 	store.BatchClientAdmin
 
-	// ConsumerGetChannel gets an events channel for the job ID, to be used by a consumer to listen for events.
+	// ECConsumerGetChannel gets an events channel for the job ID, to be used by a consumer to listen for events.
 	// When the caller finishes processing a job - the caller must call the function CloseFn specified in BatchEventsChan,
 	// to close the associated resources.
 	ECConsumerGetChannel(ctx context.Context, ID string) (batchEventsChan *BatchEventsChan, err error)
 
-	// ProducerSendEvents sends the specified events via associated event channels.
+	// ECProducerSendEvents sends the specified events via associated event channels.
 	// The events are sent and consumed in FIFO order.
 	ECProducerSendEvents(ctx context.Context, events []BatchEvent) (sentIDs []string, err error)
 }
@@ -179,13 +180,13 @@ type BatchEventChannelClient interface {
 type BatchStatusClient interface {
 	store.BatchClientAdmin
 
-	// Set stores or updates status data for a job.
-	Set(ctx context.Context, ID string, TTL int, data []byte) (err error)
+	// STSet stores or updates status data for a job.
+	STSet(ctx context.Context, ID string, TTL int, data []byte) (err error)
 
-	// Get retrieves the status data of a job.
+	// STGet retrieves the status data of a job.
 	// If no data exists (nil, nil) is returned.
-	Get(ctx context.Context, ID string) (data []byte, err error)
+	STGet(ctx context.Context, ID string) (data []byte, err error)
 
-	// Delete deletes the status data for a job.
-	Delete(ctx context.Context, ID string) (nDeleted int, err error)
+	// STDelete deletes the status data for a job.
+	STDelete(ctx context.Context, ID string) (nDeleted int, err error)
 }
