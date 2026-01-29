@@ -447,7 +447,9 @@ func testErrorHandling(t *testing.T) {
 	})
 
 	t.Run("should handle context cancellation", func(t *testing.T) {
+		serverReached := make(chan struct{})
 		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(serverReached) // Signal that server was reached
 			time.Sleep(2 * time.Second)
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -463,12 +465,24 @@ func testErrorHandling(t *testing.T) {
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel immediately
+		t.Cleanup(cancel)
 
+		// Cancel after the server handler is reached
+		go func() {
+			<-serverReached // Wait for server to be reached
+			time.Sleep(10 * time.Millisecond)
+			cancel()
+		}()
+
+		start := time.Now()
 		resp, genErr := client.Generate(ctx, req)
+		elapsed := time.Since(start)
+
 		assert.Nil(t, resp)
 		require.NotNil(t, genErr)
 		assert.Contains(t, genErr.Message, "cancelled")
+		// Should cancel quickly after server is reached, not wait for full 2s sleep
+		assert.Less(t, elapsed, 500*time.Millisecond)
 	})
 
 	t.Run("should handle context timeout", func(t *testing.T) {
