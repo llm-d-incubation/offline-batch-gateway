@@ -39,7 +39,7 @@ import (
 //
 // Run tests with:
 //   make test-integration
-//   Or manually: go test -v -tags=integration ./internal/shared/batch/...
+//   Or manually: go test -v -tags=integration ./internal/inference/...
 
 // Helper to start mock server on a specific port with custom args
 func startMockServer(port int, args ...string) error {
@@ -87,7 +87,7 @@ func stopMockServer(port int) {
 }
 
 // TestHTTPClientIntegration aggregates all integration test cases
-// Run with: go test -tags=integration -run TestHTTPClientIntegration
+// Run with: go test -tags=integration -run TestHTTPClientIntegration ./internal/inference
 func TestHTTPClientIntegration(t *testing.T) {
 	t.Run("BasicInference", testHTTPClientBasicInference)
 	t.Run("LatencySimulation", testHTTPClientLatencySimulation)
