@@ -118,7 +118,6 @@ func testHTTPClientBasicInference(t *testing.T) {
 	t.Run("should successfully make text completion request", func(t *testing.T) {
 		req := &GenerateRequest{
 			RequestID: "test-completion-001",
-			Model:     "fake-model",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"model":      "fake-model",
@@ -146,7 +145,6 @@ func testHTTPClientBasicInference(t *testing.T) {
 	t.Run("should successfully make chat completion request", func(t *testing.T) {
 		req := &GenerateRequest{
 			RequestID: "test-chat-001",
-			Model:     "fake-model",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"model": "fake-model",
@@ -178,7 +176,6 @@ func testHTTPClientBasicInference(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			req := &GenerateRequest{
 				RequestID: fmt.Sprintf("sequential-test-%03d", i),
-				Model:     "fake-model",
 				Endpoint:  "/v1/chat/completions",
 				Params: map[string]interface{}{
 					"model":      "fake-model",
@@ -204,7 +201,6 @@ func testHTTPClientBasicInference(t *testing.T) {
 			go func(id int) {
 				req := &GenerateRequest{
 					RequestID: fmt.Sprintf("concurrent-test-%03d", id),
-					Model:     "fake-model",
 					Endpoint:  "/v1/chat/completions",
 					Params: map[string]interface{}{
 						"model":      "fake-model",
@@ -252,7 +248,6 @@ func testHTTPClientLatencySimulation(t *testing.T) {
 	t.Run("should handle time-to-first-token latency", func(t *testing.T) {
 		req := &GenerateRequest{
 			RequestID: "ttft-latency-001",
-			Model:     "fake-model",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"model":      "fake-model",
@@ -275,7 +270,6 @@ func testHTTPClientLatencySimulation(t *testing.T) {
 	t.Run("should handle inter-token latency", func(t *testing.T) {
 		req := &GenerateRequest{
 			RequestID: "inter-token-latency-001",
-			Model:     "fake-model",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"model":      "fake-model",
@@ -326,7 +320,6 @@ func testHTTPClientFailureInjection(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "mixed-failure-001",
-			Model:     "fake-model",
 			Endpoint:  "/v1/completions",
 			Params: map[string]interface{}{
 				"model":      "fake-model",

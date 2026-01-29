@@ -26,9 +26,8 @@ type Client interface {
 // GenerateRequest represents an inference generation request
 type GenerateRequest struct {
 	RequestID string                 // unique request id set by user
-	Model     string                 // model id (also inside Params)
 	Endpoint  string                 // API endpoint (e.g., "/v1/chat/completions")
-	Params    map[string]interface{} // parameters
+	Params    map[string]interface{} // parameters (must include "model")
 }
 
 // Request Params example openai chat completion with tool calls:

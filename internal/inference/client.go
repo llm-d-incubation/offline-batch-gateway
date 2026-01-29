@@ -178,8 +178,15 @@ func (c *HTTPClient) Generate(ctx context.Context, req *GenerateRequest) (*Gener
 	// Set request body (resty handles JSON marshaling)
 	restyReq.SetBody(req.Params)
 
+	// Extract model from params for logging
+	model := ""
+	if m, ok := req.Params["model"]; ok {
+		if modelStr, ok := m.(string); ok {
+			model = modelStr
+		}
+	}
 	klog.V(4).Infof("Sending inference request to %s with request_id=%s, model=%s",
-		endpoint, req.RequestID, req.Model)
+		endpoint, req.RequestID, model)
 
 	// Execute request (resty handles retries automatically)
 	resp, err := restyReq.Post(endpoint)

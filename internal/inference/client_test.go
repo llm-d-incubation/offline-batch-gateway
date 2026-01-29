@@ -155,7 +155,6 @@ func testGenerate(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test-request-123",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"model": "gpt-4",
@@ -222,7 +221,6 @@ func testGenerate(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params: map[string]interface{}{
 				"messages": []map[string]interface{}{
@@ -250,7 +248,6 @@ func testGenerate(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "", // Empty endpoint
 			Params: map[string]interface{}{
 				"messages": []map[string]interface{}{
@@ -384,7 +381,6 @@ func testErrorHandling(t *testing.T) {
 
 				req := &GenerateRequest{
 					RequestID: "test",
-					Model:     "gpt-4",
 					Endpoint:  "/v1/chat/completions",
 					Params:    map[string]interface{}{"model": "gpt-4"},
 				}
@@ -415,7 +411,6 @@ func testErrorHandling(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -441,7 +436,6 @@ func testErrorHandling(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -467,7 +461,6 @@ func testErrorHandling(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -496,7 +489,6 @@ func testErrorHandling(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -594,7 +586,6 @@ func testRetryLogic(t *testing.T) {
 
 				req := &GenerateRequest{
 					RequestID: "test",
-					Model:     "gpt-4",
 					Endpoint:  "/v1/chat/completions",
 					Params:    map[string]interface{}{"model": "gpt-4"},
 				}
@@ -637,7 +628,6 @@ func testRetryLogic(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -671,7 +661,6 @@ func testRetryLogic(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -705,7 +694,6 @@ func testRetryLogic(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -1026,7 +1014,6 @@ func testAuthentication(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -1051,7 +1038,6 @@ func testAuthentication(t *testing.T) {
 
 		req := &GenerateRequest{
 			RequestID: "test",
-			Model:     "gpt-4",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
@@ -1073,7 +1059,6 @@ func testNetworkErrors(t *testing.T) {
 
 		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
-			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "test"},
 		})
@@ -1096,7 +1081,6 @@ func testNetworkErrors(t *testing.T) {
 
 		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
-			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "test"},
 		})
@@ -1137,7 +1121,6 @@ func testRetryHookBehavior(t *testing.T) {
 
 		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
-			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "test"},
 		})
@@ -1168,7 +1151,6 @@ func testTimeoutBehavior(t *testing.T) {
 		start := time.Now()
 		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
-			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "test"},
 		})
@@ -1202,7 +1184,6 @@ func testTimeoutBehavior(t *testing.T) {
 		start := time.Now()
 		resp, genErr := client.Generate(ctx, &GenerateRequest{
 			RequestID: "test",
-			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
 			Params:    map[string]interface{}{"model": "test"},
 		})
@@ -1255,7 +1236,6 @@ func testRetryConditionLogic(t *testing.T) {
 
 				client.Generate(context.Background(), &GenerateRequest{
 					RequestID: "test",
-					Model:     "test",
 					Endpoint:  "/v1/chat/completions",
 					Params:    map[string]interface{}{"model": "test"},
 				})
