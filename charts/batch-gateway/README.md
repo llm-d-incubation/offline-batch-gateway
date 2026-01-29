@@ -1,0 +1,215 @@
+# Batch Gateway Helm Chart
+
+This Helm chart deploys the Batch Gateway on a Kubernetes cluster, which includes:
+- **API Server**: REST API server for file and batch management
+- **Processor**: Background processor for batch job execution
+
+## Prerequisites
+
+- Kubernetes 1.19+
+- Helm 3.0+
+
+## Components
+
+### API Server (batch-gateway-apiserver)
+The API server provides a REST API for managing files and batch jobs.
+
+### Processor (batch-gateway-processor)
+The processor is a background worker component that polls for and processes batch jobs. 
+
+## Installing the Chart
+
+To install the chart with the release name `my-release`:
+
+```bash
+helm install my-release ./charts/batch-gateway
+```
+
+This will deploy only the API server by default.
+
+## Uninstalling the Chart
+
+To uninstall/delete the `my-release` deployment:
+
+```bash
+helm uninstall my-release
+```
+
+## Upgrading the Chart
+
+To upgrade an existing release with new values:
+
+```bash
+# Upgrade with a values file
+helm upgrade my-release ./charts/batch-gateway -f my-values.yaml
+
+# Or use --set
+helm upgrade my-release ./charts/batch-gateway \
+  --set apiserver.replicaCount=5
+
+# View what would change before upgrading
+helm upgrade my-release ./charts/batch-gateway \
+  -f my-values.yaml \
+  --dry-run --debug
+```
+
+## Configuration
+For a complete list of parameters, see [values.yaml](./values.yaml).
+
+## Usage
+
+### Method 1: Using a Custom Values File
+
+```bash
+cat > my-values.yaml <<EOF
+apiserver:
+  replicaCount: 3
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 200m
+EOF
+
+helm install batch-gateway ./charts/batch-gateway -f my-values.yaml
+```
+
+### Method 2: Using --set Flags
+
+```bash
+helm install batch-gateway ./charts/batch-gateway \
+  --set apiserver.replicaCount=3 \
+  --set apiserver.resources.requests.memory=256Mi
+```
+
+### Install on OpenShift
+
+OpenShift uses Security Context Constraints (SCC) that assign UIDs dynamically. Override the podSecurityContext to use SCC-assigned UIDs:
+
+```bash
+cat > openshift-values.yaml <<EOF
+apiserver:
+  podSecurityContext: {}  # Let OpenShift SCC assign UIDs
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+processor:
+  podSecurityContext: {}  # Let OpenShift SCC assign UIDs
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+EOF
+
+helm install batch-gateway ./charts/batch-gateway -f openshift-values.yaml
+```
+
+The chart will work with OpenShift's `restricted` SCC by default when podSecurityContext is empty.
+
+## Accessing the Services
+
+### API Server
+
+For ClusterIP service type (default):
+
+```bash
+export POD_NAME=$(kubectl get pods -l "app.kubernetes.io/component=apiserver" -o jsonpath="{.items[0].metadata.name}")
+kubectl port-forward $POD_NAME 8080:8000
+curl http://localhost:8080/health
+```
+
+### Processor
+
+The processor is a background worker and does not expose a service. To view logs:
+
+```bash
+kubectl logs -l "app.kubernetes.io/component=processor" -f
+```
+
+## Exposing the API Server
+
+The chart creates a ClusterIP Service by default. To expose it externally, create your own Ingress or HTTPRoute.
+
+### Using Ingress
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: batch-gateway-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: <release-name>-batch-gateway-apiserver
+            port:
+              number: 8000
+  tls:
+  - hosts:
+    - api.example.com
+    secretName: batch-gateway-tls
+```
+
+### Using Gateway API HTTPRoute
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: batch-gateway-route
+spec:
+  parentRefs:
+  - name: my-gateway
+    namespace: gateway-system
+  hostnames:
+  - api.example.com
+  rules:
+  - backendRefs:
+    - name: <release-name>-batch-gateway-apiserver
+      port: 8000
+```
+
+## Health Checks
+
+### API Server
+- **Liveness Probe**: `GET /health` on port 8000
+- **Readiness Probe**: `GET /readyz` on port 8000
+
+### Processor
+- **Liveness Probe**: `GET /health` on port 9090
+- **Readiness Probe**: `GET /health` on port 9090
+
+## Security
+
+The chart follows security best practices:
+- Runs as non-root user (UID 65532 by default)
+- Uses read-only root filesystem
+- Drops all Linux capabilities
+- Prevents privilege escalation
+- Uses seccomp profile
+
+### OpenShift Compatibility
+
+The chart is compatible with OpenShift's Security Context Constraints (SCC):
+- Set `podSecurityContext: {}` to allow OpenShift to assign UIDs from the namespace range
+- The minimal `securityContext` (drop all capabilities, no privilege escalation, read-only filesystem) works with the `restricted` SCC
+- No additional SCC configuration is required
+
+## License
+
+Copyright 2026 The llm-d Authors
+
+Licensed under the Apache License, Version 2.0.

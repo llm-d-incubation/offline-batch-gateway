@@ -1,0 +1,94 @@
+{{- if .Values.apiserver.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-gateway.apiserver.fullname" . }}
+  labels:
+    {{- include "batch-gateway.apiserver.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.apiserver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "batch-gateway.apiserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/apiserver-configmap.yaml") . | sha256sum }}
+        {{- with .Values.apiserver.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "batch-gateway.apiserver.labels" . | nindent 8 }}
+        {{- with .Values.apiserver.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "batch-gateway.apiserver.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.apiserver.podSecurityContext | nindent 8 }}
+      containers:
+      - name: apiserver
+        securityContext:
+          {{- toYaml .Values.apiserver.securityContext | nindent 12 }}
+        image: {{ include "batch-gateway.apiserver.image" . }}
+        imagePullPolicy: {{ .Values.apiserver.image.pullPolicy }}
+        args:
+        - --config=/etc/config/config.yaml
+        - --v={{ .Values.apiserver.logging.verbosity }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.apiserver.config.port }}
+          protocol: TCP
+        livenessProbe:
+          {{- toYaml .Values.apiserver.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.apiserver.readinessProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.apiserver.resources | nindent 12 }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        {{- if .Values.apiserver.tls.enabled }}
+        - name: tls
+          mountPath: /etc/tls
+          readOnly: true
+        {{- end }}
+        {{- with .Values.apiserver.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "batch-gateway.apiserver.fullname" . }}-config
+      {{- if .Values.apiserver.tls.enabled }}
+      - name: tls
+        secret:
+          {{- if .Values.apiserver.tls.secretName }}
+          secretName: {{ .Values.apiserver.tls.secretName }}
+          {{- else if .Values.apiserver.tls.certManager.enabled }}
+          secretName: {{ include "batch-gateway.apiserver.fullname" . }}-tls
+          {{- else }}
+          secretName: {{ include "batch-gateway.apiserver.fullname" . }}-tls
+          {{- end }}
+      {{- end }}
+      {{- with .Values.apiserver.volumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.apiserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiserver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiserver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
