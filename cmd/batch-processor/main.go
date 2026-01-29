@@ -132,7 +132,7 @@ func main() {
 	var eventClient db.BatchEventChannelClient
 
 	// Initialize inference client with configuration
-	inferenceClient := inference.NewHTTPClient(inference.HTTPClientConfig{
+	inferenceClient, err := inference.NewHTTPClient(inference.HTTPClientConfig{
 		BaseURL:                   cfg.InferenceGatewayURL,
 		Timeout:                   cfg.InferenceRequestTimeout,
 		APIKey:                    cfg.InferenceAPIKey,
@@ -144,6 +144,10 @@ func main() {
 		TLSClientCertFile:         cfg.InferenceTLSClientCertFile,
 		TLSClientKeyFile:          cfg.InferenceTLSClientKeyFile,
 	})
+	if err != nil {
+		logger.V(logging.ERROR).Error(err, "Failed to initialize inference client")
+		os.Exit(1)
+	}
 	logger.V(logging.INFO).Info("Initialized inference client",
 		"baseURL", cfg.InferenceGatewayURL,
 		"timeout", cfg.InferenceRequestTimeout,

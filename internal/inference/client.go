@@ -61,7 +61,7 @@ type HTTPClientConfig struct {
 }
 
 // NewHTTPClient creates a new HTTP-based inference client
-func NewHTTPClient(config HTTPClientConfig) *HTTPClient {
+func NewHTTPClient(config HTTPClientConfig) (*HTTPClient, error) {
 	// Set defaults for HTTP client
 	if config.Timeout == 0 {
 		config.Timeout = 5 * time.Minute
@@ -107,9 +107,9 @@ func NewHTTPClient(config HTTPClientConfig) *HTTPClient {
 	// Configure custom TLS if needed
 	tlsConfig, err := buildTLSConfig(config)
 	if err != nil {
-		klog.Errorf("Failed to build TLS config: %v", err)
-		// Fall back to default (system root CAs)
-	} else if tlsConfig != nil {
+		return nil, fmt.Errorf("failed to build TLS config: %w", err)
+	}
+	if tlsConfig != nil {
 		transport.TLSClientConfig = tlsConfig
 	}
 	// Otherwise, TLSClientConfig stays nil = Go uses system root CAs + TLS 1.2+ defaults
@@ -145,7 +145,7 @@ func NewHTTPClient(config HTTPClientConfig) *HTTPClient {
 
 	return &HTTPClient{
 		client: client,
-	}
+	}, nil
 }
 
 // Generate makes an inference request to the HTTP gateway with automatic retry logic

@@ -109,10 +109,11 @@ func testHTTPClientBasicInference(t *testing.T) {
 	}
 	t.Cleanup(func() { stopMockServer(testPort) })
 
-	client := NewHTTPClient(HTTPClientConfig{
+	client, err := NewHTTPClient(HTTPClientConfig{
 		BaseURL: fmt.Sprintf("http://localhost:%d", testPort),
 		Timeout: 10 * time.Second,
 	})
+	require.NoError(t, err)
 
 	t.Run("should successfully make text completion request", func(t *testing.T) {
 		req := &GenerateRequest{
@@ -127,9 +128,9 @@ func testHTTPClientBasicInference(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		require.NotNil(t, resp)
 		assert.Equal(t, "test-completion-001", resp.RequestID)
 		assert.NotEmpty(t, resp.Response)
@@ -160,9 +161,9 @@ func testHTTPClientBasicInference(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		require.NotNil(t, resp)
 
 		// Verify response structure
@@ -187,9 +188,9 @@ func testHTTPClientBasicInference(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			resp, err := client.Generate(ctx, req)
+			resp, genErr := client.Generate(ctx, req)
 
-			assert.Nil(t, err, "request %d failed", i)
+			assert.Nil(t, genErr, "request %d failed", i)
 			require.NotNil(t, resp, "request %d returned nil response", i)
 		}
 	})
@@ -242,10 +243,11 @@ func testHTTPClientLatencySimulation(t *testing.T) {
 	}
 	t.Cleanup(func() { stopMockServer(testPort) })
 
-	client := NewHTTPClient(HTTPClientConfig{
+	client, err := NewHTTPClient(HTTPClientConfig{
 		BaseURL: fmt.Sprintf("http://localhost:%d", testPort),
 		Timeout: 10 * time.Second,
 	})
+	require.NoError(t, err)
 
 	t.Run("should handle time-to-first-token latency", func(t *testing.T) {
 		req := &GenerateRequest{
@@ -260,10 +262,10 @@ func testHTTPClientLatencySimulation(t *testing.T) {
 		}
 
 		start := time.Now()
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		duration := time.Since(start)
 
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		require.NotNil(t, resp)
 		// Should take at least 200ms for TTFT
 		assert.GreaterOrEqual(t, duration, 180*time.Millisecond)
@@ -283,10 +285,10 @@ func testHTTPClientLatencySimulation(t *testing.T) {
 		}
 
 		start := time.Now()
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		duration := time.Since(start)
 
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		require.NotNil(t, resp)
 		// With 10 tokens, TTFT=200ms + ~10*50ms = ~700ms total
 		assert.GreaterOrEqual(t, duration, 200*time.Millisecond)
@@ -314,12 +316,13 @@ func testHTTPClientFailureInjection(t *testing.T) {
 		}
 		t.Cleanup(func() { stopMockServer(testPort) })
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        fmt.Sprintf("http://localhost:%d", testPort),
 			Timeout:        10 * time.Second,
 			MaxRetries:     5,
 			InitialBackoff: 50 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "mixed-failure-001",

@@ -37,6 +37,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestInferenceClient aggregates all HTTPClient test cases
@@ -103,7 +104,8 @@ func testNewHTTPInferenceClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := NewHTTPClient(tt.config)
+			client, err := NewHTTPClient(tt.config)
+			require.NoError(t, err)
 			assert.NotNil(t, client)
 			assert.NotNil(t, client.client)
 			// Note: resty.Client internal state (timeout, auth, retry config) is not directly accessible
@@ -145,10 +147,11 @@ func testGenerate(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			Timeout: 10 * time.Second,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test-request-123",
@@ -166,9 +169,9 @@ func testGenerate(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		assert.NotNil(t, resp)
 		assert.Equal(t, "test-request-123", resp.RequestID)
 		assert.NotNil(t, resp.Response)
@@ -187,18 +190,19 @@ func testGenerate(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			Timeout: 10 * time.Second,
 		})
+		require.NoError(t, err)
 
 		ctx := context.Background()
-		resp, err := client.Generate(ctx, nil)
+		resp, genErr := client.Generate(ctx, nil)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryInvalidReq, err.Category)
-		assert.Contains(t, err.Message, "cannot be nil")
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryInvalidReq, genErr.Category)
+		assert.Contains(t, genErr.Message, "cannot be nil")
 	})
 
 	t.Run("should use endpoint from request", func(t *testing.T) {
@@ -210,10 +214,11 @@ func testGenerate(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			Timeout: 10 * time.Second,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -237,10 +242,11 @@ func testGenerate(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			Timeout: 10 * time.Second,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -253,11 +259,11 @@ func testGenerate(t *testing.T) {
 			},
 		}
 
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryInvalidReq, err.Category)
-		assert.Contains(t, err.Message, "endpoint cannot be empty")
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryInvalidReq, genErr.Category)
+		assert.Contains(t, genErr.Message, "endpoint cannot be empty")
 	})
 }
 
@@ -373,7 +379,8 @@ func testErrorHandling(t *testing.T) {
 				}))
 				t.Cleanup(testServer.Close)
 
-				client := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+				client, err := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+				require.NoError(t, err)
 
 				req := &GenerateRequest{
 					RequestID: "test",
@@ -382,14 +389,14 @@ func testErrorHandling(t *testing.T) {
 					Params:    map[string]interface{}{"model": "gpt-4"},
 				}
 
-				resp, err := client.Generate(context.Background(), req)
+				resp, genErr := client.Generate(context.Background(), req)
 				assert.Nil(t, resp)
-				assert.NotNil(t, err)
-				assert.Equal(t, tt.wantCategory, err.Category)
+				assert.NotNil(t, genErr)
+				assert.Equal(t, tt.wantCategory, genErr.Category)
 				if tt.wantRetryable {
-					assert.True(t, err.IsRetryable())
+					assert.True(t, genErr.IsRetryable())
 				} else {
-					assert.False(t, err.IsRetryable())
+					assert.False(t, genErr.IsRetryable())
 				}
 			})
 		}
@@ -403,7 +410,8 @@ func testErrorHandling(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		client, err := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -412,9 +420,9 @@ func testErrorHandling(t *testing.T) {
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
 
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		// Implementation continues despite JSON parse errors, returning success with nil RawData
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		assert.NotNil(t, resp)
 		assert.Equal(t, "test", resp.RequestID)
 		assert.Nil(t, resp.RawData) // RawData should be nil for malformed JSON
@@ -428,7 +436,8 @@ func testErrorHandling(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		client, err := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -437,9 +446,9 @@ func testErrorHandling(t *testing.T) {
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
 
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		// Implementation handles empty body as successful response
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		assert.NotNil(t, resp)
 		assert.Equal(t, "test", resp.RequestID)
 		assert.Nil(t, resp.RawData) // RawData should be nil for empty JSON
@@ -453,7 +462,8 @@ func testErrorHandling(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		client, err := NewHTTPClient(HTTPClientConfig{BaseURL: testServer.URL})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -465,10 +475,10 @@ func testErrorHandling(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Contains(t, err.Message, "cancelled")
+		assert.NotNil(t, genErr)
+		assert.Contains(t, genErr.Message, "cancelled")
 	})
 
 	t.Run("should handle context timeout", func(t *testing.T) {
@@ -478,10 +488,11 @@ func testErrorHandling(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			Timeout: 100 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -491,10 +502,10 @@ func testErrorHandling(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryServer, err.Category)
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryServer, genErr.Category)
 	})
 }
 
@@ -574,11 +585,12 @@ func testRetryLogic(t *testing.T) {
 				}))
 				t.Cleanup(testServer.Close)
 
-				client := NewHTTPClient(HTTPClientConfig{
+				client, err := NewHTTPClient(HTTPClientConfig{
 					BaseURL:        testServer.URL,
 					MaxRetries:     3,
 					InitialBackoff: 10 * time.Millisecond,
 				})
+				require.NoError(t, err)
 
 				req := &GenerateRequest{
 					RequestID: "test",
@@ -587,16 +599,16 @@ func testRetryLogic(t *testing.T) {
 					Params:    map[string]interface{}{"model": "gpt-4"},
 				}
 
-				resp, err := client.Generate(context.Background(), req)
+				resp, genErr := client.Generate(context.Background(), req)
 				assert.Equal(t, tt.wantAttemptCount, attemptCount)
 
 				if tt.wantSuccess {
-					assert.Nil(t, err)
+					assert.Nil(t, genErr)
 					assert.NotNil(t, resp)
 				} else {
 					assert.Nil(t, resp)
-					assert.NotNil(t, err)
-					assert.Equal(t, tt.wantErrorCategory, err.Category)
+					assert.NotNil(t, genErr)
+					assert.Equal(t, tt.wantErrorCategory, genErr.Category)
 				}
 			})
 		}
@@ -616,11 +628,12 @@ func testRetryLogic(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        testServer.URL,
 			MaxRetries:     2,
 			InitialBackoff: 10 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -629,9 +642,9 @@ func testRetryLogic(t *testing.T) {
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
 
-		resp, err := client.Generate(context.Background(), req)
+		resp, genErr := client.Generate(context.Background(), req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.NotNil(t, genErr)
 		assert.Equal(t, 3, attemptCount) // Initial + 2 retries
 	})
 
@@ -649,11 +662,12 @@ func testRetryLogic(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        testServer.URL,
 			MaxRetries:     10,
 			InitialBackoff: 100 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -668,9 +682,9 @@ func testRetryLogic(t *testing.T) {
 			cancel()
 		}()
 
-		resp, err := client.Generate(ctx, req)
+		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.NotNil(t, genErr)
 		assert.LessOrEqual(t, attemptCount, 3) // Should stop early
 	})
 
@@ -683,10 +697,11 @@ func testRetryLogic(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:    testServer.URL,
 			MaxRetries: 0, // Retry disabled
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -695,8 +710,8 @@ func testRetryLogic(t *testing.T) {
 			Params:    map[string]interface{}{"model": "gpt-4"},
 		}
 
-		resp, err := client.Generate(context.Background(), req)
-		assert.Nil(t, err)
+		resp, genErr := client.Generate(context.Background(), req)
+		assert.Nil(t, genErr)
 		assert.NotNil(t, resp)
 		assert.Equal(t, 1, attemptCount)
 	})
@@ -799,10 +814,11 @@ func testTLSConfiguration(t *testing.T) {
 	})
 
 	t.Run("should use secure TLS defaults when InsecureSkipVerify is false", func(t *testing.T) {
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:               "https://localhost:8000",
 			TLSInsecureSkipVerify: false, // Default: use system root CAs
 		})
+		require.NoError(t, err)
 
 		assert.NotNil(t, client)
 
@@ -818,10 +834,11 @@ func testTLSConfiguration(t *testing.T) {
 	})
 
 	t.Run("should disable certificate verification when InsecureSkipVerify is true", func(t *testing.T) {
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:               "https://localhost:8443",
 			TLSInsecureSkipVerify: true, // Skip cert verification for testing
 		})
+		require.NoError(t, err)
 
 		assert.NotNil(t, client)
 
@@ -972,13 +989,14 @@ func testTLSConfiguration(t *testing.T) {
 	t.Run("should create client with all TLS options combined", func(t *testing.T) {
 		_, caCertFile, clientCertFile, clientKeyFile, _ := generateTestCerts(t)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:           "https://localhost:8000",
 			TLSCACertFile:     caCertFile,
 			TLSClientCertFile: clientCertFile,
 			TLSClientKeyFile:  clientKeyFile,
 			TLSMinVersion:     tls.VersionTLS12,
 		})
+		require.NoError(t, err)
 
 		assert.NotNil(t, client)
 
@@ -1000,10 +1018,11 @@ func testAuthentication(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 			APIKey:  "sk-test-key-123",
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -1025,9 +1044,10 @@ func testAuthentication(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL: testServer.URL,
 		})
+		require.NoError(t, err)
 
 		req := &GenerateRequest{
 			RequestID: "test",
@@ -1043,14 +1063,15 @@ func testAuthentication(t *testing.T) {
 
 func testNetworkErrors(t *testing.T) {
 	t.Run("should handle connection refused", func(t *testing.T) {
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        "http://localhost:9999", // Non-existent server
 			Timeout:        1 * time.Second,
 			MaxRetries:     2,
 			InitialBackoff: 10 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
-		resp, err := client.Generate(context.Background(), &GenerateRequest{
+		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
 			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
@@ -1058,21 +1079,22 @@ func testNetworkErrors(t *testing.T) {
 		})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryServer, err.Category)
-		assert.True(t, err.IsRetryable())
-		assert.Contains(t, err.Message, "failed to execute request")
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryServer, genErr.Category)
+		assert.True(t, genErr.IsRetryable())
+		assert.Contains(t, genErr.Message, "failed to execute request")
 	})
 
 	t.Run("should handle DNS resolution failure", func(t *testing.T) {
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        "http://nonexistent.invalid.domain.local",
 			Timeout:        1 * time.Second,
 			MaxRetries:     1,
 			InitialBackoff: 10 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
-		resp, err := client.Generate(context.Background(), &GenerateRequest{
+		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
 			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
@@ -1080,8 +1102,8 @@ func testNetworkErrors(t *testing.T) {
 		})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryServer, err.Category)
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryServer, genErr.Category)
 	})
 }
 
@@ -1106,13 +1128,14 @@ func testRetryHookBehavior(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:        testServer.URL,
 			MaxRetries:     3,
 			InitialBackoff: 10 * time.Millisecond,
 		})
+		require.NoError(t, err)
 
-		resp, err := client.Generate(context.Background(), &GenerateRequest{
+		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
 			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
@@ -1120,7 +1143,7 @@ func testRetryHookBehavior(t *testing.T) {
 		})
 
 		// Should eventually succeed after retries
-		assert.Nil(t, err)
+		assert.Nil(t, genErr)
 		assert.NotNil(t, resp)
 		assert.GreaterOrEqual(t, attemptCount, 2)
 	})
@@ -1135,14 +1158,15 @@ func testTimeoutBehavior(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:    testServer.URL,
 			Timeout:    100 * time.Millisecond, // Short timeout
 			MaxRetries: 0,                      // Disable retry for cleaner test
 		})
+		require.NoError(t, err)
 
 		start := time.Now()
-		resp, err := client.Generate(context.Background(), &GenerateRequest{
+		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
 			RequestID: "test",
 			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
@@ -1151,8 +1175,8 @@ func testTimeoutBehavior(t *testing.T) {
 		elapsed := time.Since(start)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
-		assert.Equal(t, ErrCategoryServer, err.Category)
+		assert.NotNil(t, genErr)
+		assert.Equal(t, ErrCategoryServer, genErr.Category)
 
 		// Should timeout around 100ms, not wait 5s
 		assert.True(t, elapsed < 1*time.Second)
@@ -1165,17 +1189,18 @@ func testTimeoutBehavior(t *testing.T) {
 		}))
 		t.Cleanup(testServer.Close)
 
-		client := NewHTTPClient(HTTPClientConfig{
+		client, err := NewHTTPClient(HTTPClientConfig{
 			BaseURL:    testServer.URL,
 			Timeout:    10 * time.Second, // Long client timeout
 			MaxRetries: 0,
 		})
+		require.NoError(t, err)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		t.Cleanup(cancel)
 
 		start := time.Now()
-		resp, err := client.Generate(ctx, &GenerateRequest{
+		resp, genErr := client.Generate(ctx, &GenerateRequest{
 			RequestID: "test",
 			Model:     "test",
 			Endpoint:  "/v1/chat/completions",
@@ -1184,7 +1209,7 @@ func testTimeoutBehavior(t *testing.T) {
 		elapsed := time.Since(start)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, err)
+		assert.NotNil(t, genErr)
 		assert.True(t, elapsed < 1*time.Second)
 	})
 }
@@ -1221,11 +1246,12 @@ func testRetryConditionLogic(t *testing.T) {
 				}))
 				t.Cleanup(testServer.Close)
 
-				client := NewHTTPClient(HTTPClientConfig{
+				client, err := NewHTTPClient(HTTPClientConfig{
 					BaseURL:        testServer.URL,
 					MaxRetries:     2,
 					InitialBackoff: 10 * time.Millisecond,
 				})
+				require.NoError(t, err)
 
 				client.Generate(context.Background(), &GenerateRequest{
 					RequestID: "test",
