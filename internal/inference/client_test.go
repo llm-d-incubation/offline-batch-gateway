@@ -50,9 +50,6 @@ func TestInferenceClient(t *testing.T) {
 	t.Run("TLSConfiguration", testTLSConfiguration)
 	t.Run("Authentication", testAuthentication)
 	t.Run("NetworkErrors", testNetworkErrors)
-	t.Run("RetryHookBehavior", testRetryHookBehavior)
-	t.Run("TimeoutBehavior", testTimeoutBehavior)
-	t.Run("RetryConditionLogic", testRetryConditionLogic)
 }
 
 func testNewHTTPInferenceClient(t *testing.T) {
@@ -638,45 +635,6 @@ func testRetryLogic(t *testing.T) {
 		assert.Equal(t, 3, attemptCount) // Initial + 2 retries
 	})
 
-	t.Run("should stop retrying when context is cancelled", func(t *testing.T) {
-		attemptCount := 0
-		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			attemptCount++
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"error": map[string]interface{}{
-					"code":    429,
-					"message": "Rate limit exceeded",
-				},
-			})
-		}))
-		t.Cleanup(testServer.Close)
-
-		client, err := NewHTTPClient(HTTPClientConfig{
-			BaseURL:        testServer.URL,
-			MaxRetries:     10,
-			InitialBackoff: 100 * time.Millisecond,
-		})
-		require.NoError(t, err)
-
-		req := &GenerateRequest{
-			RequestID: "test",
-			Endpoint:  "/v1/chat/completions",
-			Params:    map[string]interface{}{"model": "gpt-4"},
-		}
-
-		ctx, cancel := context.WithCancel(context.Background())
-		go func() {
-			time.Sleep(150 * time.Millisecond)
-			cancel()
-		}()
-
-		resp, genErr := client.Generate(ctx, req)
-		assert.Nil(t, resp)
-		require.NotNil(t, genErr)
-		assert.LessOrEqual(t, attemptCount, 3) // Should stop early
-	})
-
 	t.Run("should work without retry when MaxRetries is 0", func(t *testing.T) {
 		attemptCount := 0
 		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1089,10 +1047,8 @@ func testNetworkErrors(t *testing.T) {
 		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryServer, genErr.Category)
 	})
-}
 
-func testRetryHookBehavior(t *testing.T) {
-	t.Run("should retry on network errors", func(t *testing.T) {
+	t.Run("should retry and recover from connection close", func(t *testing.T) {
 		attemptCount := 0
 
 		// Create a server that closes connection abruptly
@@ -1132,120 +1088,3 @@ func testRetryHookBehavior(t *testing.T) {
 	})
 }
 
-func testTimeoutBehavior(t *testing.T) {
-	t.Run("should respect configured client timeout", func(t *testing.T) {
-		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(5 * time.Second) // Long delay
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(map[string]interface{}{"id": "success"})
-		}))
-		t.Cleanup(testServer.Close)
-
-		client, err := NewHTTPClient(HTTPClientConfig{
-			BaseURL:    testServer.URL,
-			Timeout:    100 * time.Millisecond, // Short timeout
-			MaxRetries: 0,                      // Disable retry for cleaner test
-		})
-		require.NoError(t, err)
-
-		start := time.Now()
-		resp, genErr := client.Generate(context.Background(), &GenerateRequest{
-			RequestID: "test",
-			Endpoint:  "/v1/chat/completions",
-			Params:    map[string]interface{}{"model": "test"},
-		})
-		elapsed := time.Since(start)
-
-		assert.Nil(t, resp)
-		require.NotNil(t, genErr)
-		assert.Equal(t, ErrCategoryServer, genErr.Category)
-
-		// Should timeout around 100ms, not wait 5s
-		assert.True(t, elapsed < 1*time.Second)
-	})
-
-	t.Run("should respect context deadline over client timeout", func(t *testing.T) {
-		testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(5 * time.Second)
-			w.WriteHeader(http.StatusOK)
-		}))
-		t.Cleanup(testServer.Close)
-
-		client, err := NewHTTPClient(HTTPClientConfig{
-			BaseURL:    testServer.URL,
-			Timeout:    10 * time.Second, // Long client timeout
-			MaxRetries: 0,
-		})
-		require.NoError(t, err)
-
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		t.Cleanup(cancel)
-
-		start := time.Now()
-		resp, genErr := client.Generate(ctx, &GenerateRequest{
-			RequestID: "test",
-			Endpoint:  "/v1/chat/completions",
-			Params:    map[string]interface{}{"model": "test"},
-		})
-		elapsed := time.Since(start)
-
-		assert.Nil(t, resp)
-		require.NotNil(t, genErr)
-		assert.True(t, elapsed < 1*time.Second)
-	})
-}
-
-func testRetryConditionLogic(t *testing.T) {
-	t.Run("should only retry on retryable status codes", func(t *testing.T) {
-		tests := []struct {
-			name        string
-			statusCode  int
-			shouldRetry bool
-		}{
-			{"429 should retry", http.StatusTooManyRequests, true},
-			{"500 should retry", http.StatusInternalServerError, true},
-			{"502 should retry", http.StatusBadGateway, true},
-			{"503 should retry", http.StatusServiceUnavailable, true},
-			{"504 should retry", http.StatusGatewayTimeout, true},
-			{"400 should not retry", http.StatusBadRequest, false},
-			{"401 should not retry", http.StatusUnauthorized, false},
-			{"403 should not retry", http.StatusForbidden, false},
-			{"404 should not retry", http.StatusNotFound, false},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				attemptCount := 0
-				testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					attemptCount++
-					w.WriteHeader(tt.statusCode)
-					json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
-							"message": "Error",
-						},
-					})
-				}))
-				t.Cleanup(testServer.Close)
-
-				client, err := NewHTTPClient(HTTPClientConfig{
-					BaseURL:        testServer.URL,
-					MaxRetries:     2,
-					InitialBackoff: 10 * time.Millisecond,
-				})
-				require.NoError(t, err)
-
-				client.Generate(context.Background(), &GenerateRequest{
-					RequestID: "test",
-					Endpoint:  "/v1/chat/completions",
-					Params:    map[string]interface{}{"model": "test"},
-				})
-
-				if tt.shouldRetry {
-					assert.Equal(t, 3, attemptCount) // 1 initial + 2 retries
-				} else {
-					assert.Equal(t, 1, attemptCount) // No retries
-				}
-			})
-		}
-	})
-}

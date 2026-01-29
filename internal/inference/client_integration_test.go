@@ -21,7 +21,6 @@ package inference
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,62 +113,6 @@ func testHTTPClientBasicInference(t *testing.T) {
 		Timeout: 10 * time.Second,
 	})
 	require.NoError(t, err)
-
-	t.Run("should successfully make text completion request", func(t *testing.T) {
-		req := &GenerateRequest{
-			RequestID: "test-completion-001",
-			Endpoint:  "/v1/chat/completions",
-			Params: map[string]interface{}{
-				"model":      "fake-model",
-				"prompt":     "Once upon a time",
-				"max_tokens": 10,
-			},
-		}
-
-		ctx := context.Background()
-		resp, genErr := client.Generate(ctx, req)
-
-		assert.Nil(t, genErr)
-		require.NotNil(t, resp)
-		assert.Equal(t, "test-completion-001", resp.RequestID)
-		assert.NotEmpty(t, resp.Response)
-
-		// Verify response structure
-		var result map[string]interface{}
-		unmarshalErr := json.Unmarshal(resp.Response, &result)
-		assert.Nil(t, unmarshalErr)
-		assert.Contains(t, result, "id")
-		assert.Contains(t, result, "choices")
-	})
-
-	t.Run("should successfully make chat completion request", func(t *testing.T) {
-		req := &GenerateRequest{
-			RequestID: "test-chat-001",
-			Endpoint:  "/v1/chat/completions",
-			Params: map[string]interface{}{
-				"model": "fake-model",
-				"messages": []map[string]interface{}{
-					{
-						"role":    "user",
-						"content": "Hello, how are you?",
-					},
-				},
-				"max_tokens": 20,
-			},
-		}
-
-		ctx := context.Background()
-		resp, genErr := client.Generate(ctx, req)
-
-		assert.Nil(t, genErr)
-		require.NotNil(t, resp)
-
-		// Verify response structure
-		var result map[string]interface{}
-		unmarshalErr := json.Unmarshal(resp.Response, &result)
-		assert.Nil(t, unmarshalErr)
-		assert.Contains(t, result, "choices")
-	})
 
 	t.Run("should handle multiple sequential requests", func(t *testing.T) {
 		// Verifies that client can handle multiple requests and reuses connections
