@@ -131,7 +131,7 @@ func NewHTTPClient(config HTTPClientConfig) (*HTTPClient, error) {
 
 			statusCode := r.StatusCode()
 			// Retry on 429 (rate limit) and 5xx (server errors)
-			return statusCode == http.StatusTooManyRequests || statusCode >= 500
+			return statusCode == http.StatusTooManyRequests || statusCode >= http.StatusInternalServerError
 		})
 
 		// Add retry hook for logging
@@ -288,7 +288,7 @@ func (c *HTTPClient) mapStatusCodeToCategory(statusCode int) ErrorCategory {
 	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout: // 500, 502, 503, 504
 		return ErrCategoryServer
 	default:
-		if statusCode >= 500 {
+		if statusCode >= http.StatusInternalServerError {
 			return ErrCategoryServer
 		}
 		return ErrCategoryUnknown
