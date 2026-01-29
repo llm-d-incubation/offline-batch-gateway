@@ -106,7 +106,7 @@ func testNewHTTPInferenceClient(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, err := NewHTTPClient(tt.config)
 			require.NoError(t, err)
-			assert.NotNil(t, client)
+			require.NotNil(t, client)
 			assert.NotNil(t, client.client)
 			// Note: resty.Client internal state (timeout, auth, retry config) is not directly accessible
 			// Behavior is validated through integration and functional tests
@@ -171,7 +171,7 @@ func testGenerate(t *testing.T) {
 		resp, genErr := client.Generate(ctx, req)
 
 		assert.Nil(t, genErr)
-		assert.NotNil(t, resp)
+		require.NotNil(t, resp)
 		assert.Equal(t, "test-request-123", resp.RequestID)
 		assert.NotNil(t, resp.Response)
 		assert.NotNil(t, resp.RawData)
@@ -199,7 +199,7 @@ func testGenerate(t *testing.T) {
 		resp, genErr := client.Generate(ctx, nil)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryInvalidReq, genErr.Category)
 		assert.Contains(t, genErr.Message, "cannot be nil")
 	})
@@ -258,7 +258,7 @@ func testGenerate(t *testing.T) {
 
 		resp, genErr := client.Generate(context.Background(), req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryInvalidReq, genErr.Category)
 		assert.Contains(t, genErr.Message, "endpoint cannot be empty")
 	})
@@ -387,7 +387,7 @@ func testErrorHandling(t *testing.T) {
 
 				resp, genErr := client.Generate(context.Background(), req)
 				assert.Nil(t, resp)
-				assert.NotNil(t, genErr)
+				require.NotNil(t, genErr)
 				assert.Equal(t, tt.wantCategory, genErr.Category)
 				if tt.wantRetryable {
 					assert.True(t, genErr.IsRetryable())
@@ -418,7 +418,7 @@ func testErrorHandling(t *testing.T) {
 		resp, genErr := client.Generate(context.Background(), req)
 		// Implementation continues despite JSON parse errors, returning success with nil RawData
 		assert.Nil(t, genErr)
-		assert.NotNil(t, resp)
+		require.NotNil(t, resp)
 		assert.Equal(t, "test", resp.RequestID)
 		assert.Nil(t, resp.RawData) // RawData should be nil for malformed JSON
 		assert.NotNil(t, resp.Response)
@@ -443,7 +443,7 @@ func testErrorHandling(t *testing.T) {
 		resp, genErr := client.Generate(context.Background(), req)
 		// Implementation handles empty body as successful response
 		assert.Nil(t, genErr)
-		assert.NotNil(t, resp)
+		require.NotNil(t, resp)
 		assert.Equal(t, "test", resp.RequestID)
 		assert.Nil(t, resp.RawData) // RawData should be nil for empty JSON
 		assert.NotNil(t, resp.Response)
@@ -470,7 +470,7 @@ func testErrorHandling(t *testing.T) {
 
 		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Contains(t, genErr.Message, "cancelled")
 	})
 
@@ -496,7 +496,7 @@ func testErrorHandling(t *testing.T) {
 		ctx := context.Background()
 		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryServer, genErr.Category)
 	})
 }
@@ -598,7 +598,7 @@ func testRetryLogic(t *testing.T) {
 					assert.NotNil(t, resp)
 				} else {
 					assert.Nil(t, resp)
-					assert.NotNil(t, genErr)
+					require.NotNil(t, genErr)
 					assert.Equal(t, tt.wantErrorCategory, genErr.Category)
 				}
 			})
@@ -634,7 +634,7 @@ func testRetryLogic(t *testing.T) {
 
 		resp, genErr := client.Generate(context.Background(), req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, 3, attemptCount) // Initial + 2 retries
 	})
 
@@ -673,7 +673,7 @@ func testRetryLogic(t *testing.T) {
 
 		resp, genErr := client.Generate(ctx, req)
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.LessOrEqual(t, attemptCount, 3) // Should stop early
 	})
 
@@ -808,7 +808,7 @@ func testTLSConfiguration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.NotNil(t, client)
+		require.NotNil(t, client)
 
 		// Access the underlying transport to verify TLS configuration
 		httpClient := client.client.GetClient()
@@ -828,7 +828,7 @@ func testTLSConfiguration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.NotNil(t, client)
+		require.NotNil(t, client)
 
 		// Access the underlying transport to verify TLS configuration
 		httpClient := client.client.GetClient()
@@ -986,7 +986,7 @@ func testTLSConfiguration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		assert.NotNil(t, client)
+		require.NotNil(t, client)
 
 		// Verify the transport has custom TLS config
 		httpClient := client.client.GetClient()
@@ -1064,7 +1064,7 @@ func testNetworkErrors(t *testing.T) {
 		})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryServer, genErr.Category)
 		assert.True(t, genErr.IsRetryable())
 		assert.Contains(t, genErr.Message, "failed to execute request")
@@ -1086,7 +1086,7 @@ func testNetworkErrors(t *testing.T) {
 		})
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryServer, genErr.Category)
 	})
 }
@@ -1157,7 +1157,7 @@ func testTimeoutBehavior(t *testing.T) {
 		elapsed := time.Since(start)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.Equal(t, ErrCategoryServer, genErr.Category)
 
 		// Should timeout around 100ms, not wait 5s
@@ -1190,7 +1190,7 @@ func testTimeoutBehavior(t *testing.T) {
 		elapsed := time.Since(start)
 
 		assert.Nil(t, resp)
-		assert.NotNil(t, genErr)
+		require.NotNil(t, genErr)
 		assert.True(t, elapsed < 1*time.Second)
 	})
 }
