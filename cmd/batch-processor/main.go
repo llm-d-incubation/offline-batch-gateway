@@ -42,6 +42,14 @@ func main() {
 	klog.InitFlags(nil)
 	defer klog.Flush()
 
+	if err := run(); err != nil {
+		klog.ErrorS(err, "Processor failed to start")
+		klog.Flush() // Must flush manually before os.Exit
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// load configuration & logging setup
 	rootLogger := klog.Background()
 	ctx := klog.NewContext(context.Background(), rootLogger)
@@ -61,13 +69,13 @@ func main() {
 
 	if err := cfg.LoadFromYAML(*cfgFilePath); err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to load config file. Processor cannot start", "path", *cfgFilePath, "err", err)
-		os.Exit(1)
+		return err
 	}
 
 	// metrics setup
 	if err := metrics.InitMetrics(*cfg); err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to initialize metrics")
-		os.Exit(1)
+		return err
 	}
 	logger.V(logging.INFO).Info("Metrics initialized", "numWorkers", cfg.NumWorkers)
 
@@ -146,7 +154,7 @@ func main() {
 	})
 	if err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to initialize inference client")
-		os.Exit(1)
+		return err
 	}
 	logger.V(logging.INFO).Info("Initialized inference client",
 		"baseURL", cfg.InferenceGatewayURL,
@@ -167,11 +175,12 @@ func main() {
 	logger.V(logging.INFO).Info("Processor polling loop started", "pollInterval", cfg.PollInterval.String())
 	if err := proc.RunPollingLoop(ctx); err != nil {
 		logger.V(logging.ERROR).Error(err, "Processor polling loop exited with error")
-		os.Exit(1)
+		return err
 	}
 
 	// cleanup and shutdown
 	logger.V(logging.INFO).Info("Processor exited, shutting down")
 	proc.Stop(ctx) // wait for all workers to finish
 	logger.V(logging.INFO).Info("Processor exited gracefully")
+	return nil
 }
