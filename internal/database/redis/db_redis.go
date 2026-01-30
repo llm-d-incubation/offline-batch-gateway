@@ -54,7 +54,6 @@ const (
 	tagsSep              = ";;"
 	eventChanSize        = 100
 	logFreqDefault       = 10 * time.Minute
-	redisClientNameSuf   = "-batch"
 	versionV1            = "1"
 )
 
