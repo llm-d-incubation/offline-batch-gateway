@@ -28,10 +28,10 @@ import (
 	"k8s.io/klog/v2"
 
 	db "github.com/llm-d-incubation/batch-gateway/internal/database/api"
+	"github.com/llm-d-incubation/batch-gateway/internal/inference"
 	"github.com/llm-d-incubation/batch-gateway/internal/processor/config"
 	"github.com/llm-d-incubation/batch-gateway/internal/processor/metrics"
 	"github.com/llm-d-incubation/batch-gateway/internal/processor/worker"
-	"github.com/llm-d-incubation/batch-gateway/internal/shared/batch"
 	"github.com/llm-d-incubation/batch-gateway/internal/util/interrupt"
 	"github.com/llm-d-incubation/batch-gateway/internal/util/logging"
 	"github.com/llm-d-incubation/batch-gateway/internal/util/tls"
@@ -42,6 +42,14 @@ func main() {
 	klog.InitFlags(nil)
 	defer klog.Flush()
 
+	if err := run(); err != nil {
+		klog.ErrorS(err, "Processor failed to start")
+		klog.Flush() // Must flush manually before os.Exit
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// load configuration & logging setup
 	rootLogger := klog.Background()
 	ctx := klog.NewContext(context.Background(), rootLogger)
@@ -61,13 +69,13 @@ func main() {
 
 	if err := cfg.LoadFromYAML(*cfgFilePath); err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to load config file. Processor cannot start", "path", *cfgFilePath, "err", err)
-		os.Exit(1)
+		return err
 	}
 
 	// metrics setup
 	if err := metrics.InitMetrics(*cfg); err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to initialize metrics")
-		os.Exit(1)
+		return err
 	}
 	logger.V(logging.INFO).Info("Metrics initialized", "numWorkers", cfg.NumWorkers)
 
@@ -130,7 +138,29 @@ func main() {
 	var pqClient db.BatchPriorityQueueClient
 	var statusClient db.BatchStatusClient
 	var eventClient db.BatchEventChannelClient
-	var inferenceClient batch.InferenceClient
+
+	// Initialize inference client with configuration
+	inferenceClient, err := inference.NewHTTPClient(inference.HTTPClientConfig{
+		BaseURL:                   cfg.InferenceGatewayURL,
+		Timeout:                   cfg.InferenceRequestTimeout,
+		APIKey:                    cfg.InferenceAPIKey,
+		MaxRetries:                cfg.InferenceMaxRetries,
+		InitialBackoff:            cfg.InferenceInitialBackoff,
+		MaxBackoff:                cfg.InferenceMaxBackoff,
+		TLSInsecureSkipVerify:     cfg.InferenceTLSInsecureSkipVerify,
+		TLSCACertFile:             cfg.InferenceTLSCACertFile,
+		TLSClientCertFile:         cfg.InferenceTLSClientCertFile,
+		TLSClientKeyFile:          cfg.InferenceTLSClientKeyFile,
+	})
+	if err != nil {
+		logger.V(logging.ERROR).Error(err, "Failed to initialize inference client")
+		return err
+	}
+	logger.V(logging.INFO).Info("Initialized inference client",
+		"baseURL", cfg.InferenceGatewayURL,
+		"timeout", cfg.InferenceRequestTimeout,
+		"maxRetries", cfg.InferenceMaxRetries)
+
 	processorClients := worker.NewProcessorClients(
 		dbClient, pqClient, statusClient, eventClient, inferenceClient,
 	)
@@ -145,11 +175,12 @@ func main() {
 	logger.V(logging.INFO).Info("Processor polling loop started", "pollInterval", cfg.PollInterval.String())
 	if err := proc.RunPollingLoop(ctx); err != nil {
 		logger.V(logging.ERROR).Error(err, "Processor polling loop exited with error")
-		os.Exit(1)
+		return err
 	}
 
 	// cleanup and shutdown
 	logger.V(logging.INFO).Info("Processor exited, shutting down")
 	proc.Stop(ctx) // wait for all workers to finish
 	logger.V(logging.INFO).Info("Processor exited gracefully")
+	return nil
 }
