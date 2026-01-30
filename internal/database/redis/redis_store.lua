@@ -34,13 +34,4 @@ if type(result) == 'table' and result.err then
     return result.err
 end
 
--- local ssKey = KEYS[2]
--- local score = tonumber(ARGV[7])
--- -- Add the key to the sorted set.
--- result = redis.pcall('ZADD', ssKey, 'nx', score, fieldId)
--- if type(result) == 'table' and result.err then
---     redis.pcall('HDEL', hashKey, "ver", "id", "slo", "tags", "status", "spec")
---     return result.err
--- end
-
 return ''

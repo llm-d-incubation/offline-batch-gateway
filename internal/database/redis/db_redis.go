@@ -21,6 +21,7 @@ package redis
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -222,7 +223,6 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 	cmds, err := c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
 		for _, id := range IDs {
-			pipe.ZRem(cctx, priorityQueueKeyName, id)
 			res := pipe.HDel(cctx, getKeyForStore(id),
 				fieldNameVersion, fieldNameId, fieldNameSlo, fieldNameTags, fieldNameStatus, fieldNameSpec)
 			resMap[id] = res
@@ -445,62 +445,162 @@ func dbItemFromHget(vals []interface{}, includeStatic bool, logger klog.Logger) 
 	return job, nil
 }
 
-func (c *BatchDSClientRedis) PQEnqueue(ctx context.Context, jobPriority *db_api.BatchJobPriority) (err error) {
+func (c *BatchDSClientRedis) PQEnqueue(ctx context.Context, item *db_api.BatchJobPriority) (err error) {
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+	if item == nil {
+		err = fmt.Errorf("empty item")
+		logger.Error(err, "PQEnqueue:")
+		return
+	}
+	if err = item.IsValid(); err != nil {
+		logger.Error(err, "PQEnqueue: item is invalid")
+		return
+	}
+	logger = logger.WithValues("batchId", item.ID)
+
+	data, lerr := json.Marshal(item)
+	if lerr != nil {
+		err = lerr
+		logger.Error(err, "PQEnqueue: Marshal failed")
+		return
+
+	}
+	if err = item.IsValid(); err != nil {
+		logger.Error(err, "PQEnqueue: validation failed")
+		return
+	}
+	zitem := goredis.Z{
+		Score:  float64(item.SLO.UnixMicro()),
+		Member: data,
+	}
+	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
+	res := c.redisClient.ZAddNX(cctx, priorityQueueKeyName, zitem)
+	ccancel()
+	if res == nil {
+		err = fmt.Errorf("redis command result is nil")
+		logger.Error(err, "PQEnqueue:")
+		return
+	}
+	if err = res.Err(); err != nil {
+		logger.Error(err, "PQEnqueue: redis ZAddNX failed")
+		return
+	}
+	logger.Info("PQEnqueue: succeeded")
+	return
+}
+
+func (c *BatchDSClientRedis) PQDelete(ctx context.Context, item *db_api.BatchJobPriority) (nDeleted int, err error) {
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+	if item == nil {
+		err = fmt.Errorf("empty item")
+		logger.Error(err, "PQDelete:")
+		return
+	}
+	if err = item.IsValid(); err != nil {
+		logger.Error(err, "PQDelete: item is invalid")
+		return
+	}
+	logger = logger.WithValues("batchId", item.ID)
+
+	if err = item.IsValid(); err != nil {
+		logger.Error(err, "PQDelete: validation failed")
+		return
+	}
+	score := strconv.FormatInt(item.SLO.UnixMicro(), 10)
+	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
+	res := c.redisClient.ZRemRangeByScore(cctx, priorityQueueKeyName, score, score)
+	ccancel()
+	if res == nil {
+		err = fmt.Errorf("redis command result is nil")
+		logger.Error(err, "PQDelete:")
+		return
+	}
+	if err = res.Err(); err != nil {
+		logger.Error(err, "PQDelete: redis ZRemRangeByScore failed")
+		return
+	}
+	nDeleted = int(res.Val())
+	logger.Info("PQDelete: succeeded")
 	return
 }
 
 func (c *BatchDSClientRedis) PQDequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
 	jobPriorities []*db_api.BatchJobPriority, err error) {
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+
+	// Get items from the queue.
+	cctx, ccancel := context.WithTimeout(ctx, timeout+2*time.Second)
+	_, vals, err := c.redisClient.BZMPop(
+		cctx, timeout, goredis.Min.String(), int64(maxObjs), priorityQueueKeyName).Result()
+	ccancel()
+	if err != nil {
+		if unrecognizedBlockingError(err) {
+			logger.Error(err, "PQDequeue: BZMPop failed")
+			cerr := c.redisClientChecker.Check(ctx)
+			if cerr != nil {
+				logger.Error(err, "PQDequeue: ClientCheck failed")
+			}
+			return nil, err
+		}
+		if time.Since(c.idleLogLast) >= c.idleLogFreq {
+			logger.Info("PQDequeue: no items")
+			c.idleLogLast = time.Now()
+		}
+		return nil, nil
+	}
+	if len(vals) == 0 {
+		if time.Since(c.idleLogLast) >= c.idleLogFreq {
+			logger.Info("PQDequeue: no jobs")
+			c.idleLogLast = time.Now()
+		}
+		return nil, nil
+	}
+
+	jobPriorities = make([]*db_api.BatchJobPriority, 0, len(vals))
+	for _, val := range vals {
+		item := &db_api.BatchJobPriority{}
+		err = json.Unmarshal([]byte(val.Member.(string)), item)
+		if err != nil {
+			logger.Error(err, "PQDelete: Unmarshal failed")
+			return
+		}
+		jobPriorities = append(jobPriorities, item)
+	}
+
+	logger.Info("PQDequeue: succeeded")
 	return
 }
 
-func (c *BatchDSClientRedis) PQDelete(ctx context.Context, jobPriority *db_api.BatchJobPriority) (nDeleted int, err error) {
-	return
+func unrecognizedBlockingError(err error) bool {
+	errStr := err.Error()
+	unrecognized :=
+		err != goredis.Nil &&
+			!strings.Contains(errStr, "i/o timeout") &&
+			!strings.Contains(errStr, "context")
+	return unrecognized
 }
 
-// if addJobToQueue {
-// 	item := goredis.Z{
-// 		Score:  float64(job.SLO.UnixMicro()),
-// 		Member: job.ID,
-// 	}
-// 	pipe.ZAddNX(cctx, priorityQueueKeyName, item)
-// }
+func (c *BatchDSClientRedis) ECConsumerGetChannel(ctx context.Context, ID string) (
+	batchEventsChan *db_api.BatchEventsChan, err error) {
+
+	return
+}
 
 // func (c *BatchDSClientRedis) GetForProcessing(
 // 	ctx context.Context, timeout time.Duration, maxJobs int) (
 // 	resJobs []*db_api.BatchJob, resEvents []*db_api.BatchEventsChan, err error) {
-
-// 	// if logger == nil {
-// 	// 	logger = logging.GetInstance()
-// 	// }
-
-// 	// Get job IDs from the priority queue.
-// 	cctx, ccancel := context.WithTimeout(ctx, timeout+2*time.Second)
-// 	_, vals, err := c.redisClient.BZMPop(
-// 		cctx, timeout, goredis.Min.String(), int64(maxJobs), priorityQueueKeyName).Result()
-// 	ccancel()
-// 	if err != nil {
-// 		if unrecognizedBlockingError(err) {
-// 			logger.Error(err, "GetForProcessing: BZMPop failed")
-// 			cerr := c.redisClientChecker.Check(ctx, logger)
-// 			if cerr != nil {
-// 				logger.Error(err, "GetForProcessing: ClientCheck failed")
-// 			}
-// 			return nil, nil, err
-// 		}
-// 		if time.Since(c.idleLogLast) >= c.idleLogFreq {
-// 			logger.Info("GetForProcessing: no jobs")
-// 			c.idleLogLast = time.Now()
-// 		}
-// 		return nil, nil, nil
-// 	}
-// 	if len(vals) == 0 {
-// 		if time.Since(c.idleLogLast) >= c.idleLogFreq {
-// 			logger.Info("GetForProcessing: no jobs")
-// 			c.idleLogLast = time.Now()
-// 		}
-// 		return nil, nil, nil
-// 	}
 
 // 	// Get the job records.
 // 	cctx, ccancel = context.WithTimeout(ctx, timeout)
@@ -664,13 +764,4 @@ func (c *BatchDSClientRedis) PQDelete(ctx context.Context, jobPriority *db_api.B
 
 // func getKeyForEvent(key string) string {
 // 	return eventKeysPrefix + key
-// }
-
-// func unrecognizedBlockingError(err error) bool {
-// 	errStr := err.Error()
-// 	unrecognized :=
-// 		err != goredis.Nil &&
-// 			!strings.Contains(errStr, "i/o timeout") &&
-// 			!strings.Contains(errStr, "context")
-// 	return unrecognized
 // }

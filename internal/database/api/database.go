@@ -101,10 +101,23 @@ var TagsLogicalCondNames = map[TagsLogicalCond]string{
 // -- Batch jobs priority queue --
 
 type BatchJobPriority struct {
-	ID   string    // ID of the batch job.
-	SLO  time.Time // The SLO value determines the priority of the job.
-	TTL  int       // TTL in seconds for the record.
-	Data []byte    // User defined data.
+	ID   string    `json:"id,omitempty"`   // ID of the batch job.
+	SLO  time.Time `json:"slo,omitempty"`  // The SLO value determines the priority of the job.
+	TTL  int       `json:"ttl,omitempty"`  // TTL in seconds for the record.
+	Data []byte    `json:"data,omitempty"` // User defined data.
+}
+
+func (bj *BatchJobPriority) IsValid() error {
+	if len(bj.ID) == 0 {
+		return fmt.Errorf("ID is empty")
+	}
+	if bj.SLO.IsZero() {
+		return fmt.Errorf("SLO is zero for ID %s", bj.ID)
+	}
+	// if bj.TTL <= 0 { TBD
+	// 	return fmt.Errorf("TTL is invalid for ID %s", bj.ID)
+	// }
+	return nil
 }
 
 // BatchPriorityQueueClient enables to perform operations on a priority queue of jobs.
