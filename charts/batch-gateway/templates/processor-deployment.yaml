@@ -1,0 +1,100 @@
+{{- if .Values.processor.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "batch-gateway.processor.fullname" . }}
+  labels:
+    {{- include "batch-gateway.processor.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.processor.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "batch-gateway.processor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/processor-configmap.yaml") . | sha256sum }}
+        {{- with .Values.processor.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "batch-gateway.processor.labels" . | nindent 8 }}
+        {{- with .Values.processor.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "batch-gateway.processor.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.processor.podSecurityContext | nindent 8 }}
+      containers:
+      - name: processor
+        securityContext:
+          {{- toYaml .Values.processor.securityContext | nindent 12 }}
+        image: {{ include "batch-gateway.processor.image" . }}
+        imagePullPolicy: {{ .Values.processor.image.pullPolicy }}
+        args:
+        - --config=/etc/config/config.yaml
+        - --v={{ .Values.processor.logging.verbosity }}
+        ports:
+        - name: metrics
+          containerPort: {{ .Values.processor.config.addr | trimPrefix ":" }}
+          protocol: TCP
+        livenessProbe:
+          {{- toYaml .Values.processor.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.processor.readinessProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.processor.resources | nindent 12 }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        {{- if .Values.processor.tls.enabled }}
+        - name: tls
+          mountPath: /etc/tls
+          readOnly: true
+        {{- end }}
+        {{- with .Values.processor.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.processor.database.existingSecret }}
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.processor.database.existingSecret }}
+              key: {{ .Values.processor.database.secretKey }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "batch-gateway.processor.fullname" . }}-config
+      {{- if .Values.processor.tls.enabled }}
+      - name: tls
+        secret:
+          {{- if .Values.processor.tls.secretName }}
+          secretName: {{ .Values.processor.tls.secretName }}
+          {{- else }}
+          secretName: {{ include "batch-gateway.processor.fullname" . }}-tls
+          {{- end }}
+      {{- end }}
+      {{- with .Values.processor.volumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.processor.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.processor.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.processor.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
