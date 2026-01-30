@@ -160,7 +160,7 @@ func (p *Processor) RunPollingLoop(ctx context.Context) error {
 		// TODO:: metrics.RecordQueueWait(time.Since(task.EnqueuedAt), tenantID)
 
 		// process job
-		go func(wid int, j *db.BatchJob) {
+		go func(wid int, j *db.BatchItem) {
 			defer func() {
 				if r := recover(); r != nil {
 					recoverErr := fmt.Errorf("%v", r)
@@ -180,7 +180,7 @@ func (p *Processor) RunPollingLoop(ctx context.Context) error {
 func (p *Processor) getTaskFromQueue(ctx context.Context) *db.BatchJobPriority {
 	logger := klog.FromContext(ctx)
 
-	tasks, err := p.clients.priorityQueue.Dequeue(ctx, 0, 1) // get only one job without blocking the queue
+	tasks, err := p.clients.priorityQueue.PQDequeue(ctx, 0, 1) // get only one job without blocking the queue
 	if err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to dequeue a batch job")
 		return nil
@@ -197,12 +197,12 @@ func (p *Processor) getTaskFromQueue(ctx context.Context) *db.BatchJobPriority {
 }
 
 // getJobData gets job's db data
-func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (*db.BatchJob, error) {
+func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (*db.BatchItem, error) {
 	logger := klog.FromContext(ctx)
 
 	// get only one job data
 	ids := []string{task.ID}
-	jobs, _, err := p.clients.database.Get(ctx, ids, nil, db.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := p.clients.database.DBGet(ctx, ids, nil, db.TagsLogicalCondNa, true, 0, 1)
 
 	// job db data does not exist or failed to fetch the data
 	if err != nil || len(jobs) == 0 {
@@ -213,7 +213,7 @@ func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (
 		logger.V(logging.ERROR).Error(jobDataErr, "Failed to fetch detailed job info. re-queueing ID", "jobID", task.ID)
 
 		// can't process the job. put the task back to the queue.
-		if enqueueErr := p.clients.priorityQueue.Enqueue(ctx, task); enqueueErr != nil {
+		if enqueueErr := p.clients.priorityQueue.PQEnqueue(ctx, task); enqueueErr != nil {
 			logger.V(logging.ERROR).Error(enqueueErr, "CRITICAL: Failed to re-enqueue job", "jobID", task.ID)
 		}
 		return nil, jobDataErr
@@ -233,7 +233,7 @@ func (p *Processor) getJobData(ctx context.Context, task *db.BatchJobPriority) (
 // TODO:: add output file writing (output file writing)
 // TODO:: add output file reading (output file reading)
 // TODO:: add output file closing (output file closing)
-func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJob) {
+func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchItem) {
 	// logger and ctx
 	logger := klog.FromContext(ctx).WithValues("jobID", job.ID, "workerID", workerId)
 	jobctx := klog.NewContext(ctx, logger)
@@ -254,11 +254,11 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 	}()
 
 	// status update - inprogress (TTL 24h)
-	p.clients.status.Set(jobctx, job.ID, 24*60*60, []byte(batch.StatusInProgress))
+	p.clients.status.STSet(jobctx, job.ID, 24*60*60, []byte(batch.StatusInProgress))
 	logger.V(logging.DEBUG).Info("Worker started job", "workerID", workerId, "jobID", job.ID)
 
 	// TODO:: file validating
-	p.clients.status.Set(jobctx, job.ID, 24*60*60, []byte(batch.StatusValidating))
+	p.clients.status.STSet(jobctx, job.ID, 24*60*60, []byte(batch.StatusValidating))
 
 	// TODO:: download file, streaming
 	// check if the method in the request is allowed
@@ -349,13 +349,13 @@ func (p *Processor) processJob(ctx context.Context, workerId int, job *db.BatchJ
 	}
 
 	// status update
-	p.clients.status.Set(jobctx, job.ID, 24*60*60, []byte(batch.StatusFinalizing))
+	p.clients.status.STSet(jobctx, job.ID, 24*60*60, []byte(batch.StatusFinalizing))
 
 	// db update (job.Status should be updated before this line)
-	if err := p.clients.database.Update(jobctx, job); err != nil {
+	if err := p.clients.database.DBUpdate(jobctx, job); err != nil {
 		logger.V(logging.ERROR).Error(err, "Failed to update final job status in DB", "jobID", job.ID)
 	}
-	p.clients.status.Set(jobctx, job.ID, 24*60*60, []byte(finalStatus))
+	p.clients.status.STSet(jobctx, job.ID, 24*60*60, []byte(finalStatus))
 	logger.V(logging.INFO).Info("Job Processed", "jobID", job.ID, "status", finalStatus)
 }
 

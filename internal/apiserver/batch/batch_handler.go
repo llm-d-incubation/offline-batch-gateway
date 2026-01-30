@@ -37,7 +37,7 @@ const (
 	pathParamAfter   = "after"
 )
 
-func jobToBatch(job *api.BatchJob) (*openai.Batch, error) {
+func jobToBatch(job *api.BatchItem) (*openai.Batch, error) {
 	batch := &openai.Batch{
 		ID: job.ID,
 	}
@@ -163,7 +163,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	job := &api.BatchJob{
+	job := &api.BatchItem{
 		ID:     batchID,
 		SLO:    slo,
 		TTL:    ttl,
@@ -172,7 +172,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		Status: batchStatusData,
 	}
 
-	_, err = c.dbClient.Store(ctx, job)
+	_, err = c.dbClient.DBStore(ctx, job)
 	if err != nil {
 		logger.Error(err, "failed to store batch job")
 		common.WriteInternalServerError(ctx, w)
@@ -184,9 +184,9 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 		ID:  batchID,
 		SLO: slo,
 	}
-	if err := c.queueClient.Enqueue(ctx, bjp); err != nil {
+	if err := c.queueClient.PQEnqueue(ctx, bjp); err != nil {
 		logger.Error(err, "failed to enqueue batch job priority")
-		if _, delErr := c.dbClient.Delete(ctx, []string{batchID}); delErr != nil {
+		if _, delErr := c.dbClient.DBDelete(ctx, []string{batchID}); delErr != nil {
 			logger.Error(delErr, "failed to cleanup batch job after enqueue failure", "batch_id", batchID)
 		}
 		common.WriteInternalServerError(ctx, w)
@@ -245,7 +245,7 @@ func (c *BatchApiHandler) ListBatches(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: We need a way to associate jobs to a tenant / user
 	// Request limit+1 to check if there are more results
-	jobs, _, err := c.dbClient.Get(ctx, nil, nil, api.TagsLogicalCondNa, true, after, limit+1)
+	jobs, _, err := c.dbClient.DBGet(ctx, nil, nil, api.TagsLogicalCondNa, true, after, limit+1)
 	if err != nil {
 		logger.Error(err, "failed to list batches from database")
 		common.WriteInternalServerError(ctx, w)
@@ -298,7 +298,7 @@ func (c *BatchApiHandler) RetrieveBatch(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Get batch from database
-	jobs, _, err := c.dbClient.Get(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := c.dbClient.DBGet(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
 	if err != nil {
 		logger.Error(err, "failed to get batch from database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -336,7 +336,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get batch from database
-	jobs, _, err := c.dbClient.Get(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
+	jobs, _, err := c.dbClient.DBGet(ctx, []string{batchID}, nil, api.TagsLogicalCondNa, true, 0, 1)
 	if err != nil {
 		logger.Error(err, "failed to get batch from database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -369,7 +369,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	jobPriority := &api.BatchJobPriority{
 		ID: batchID,
 	}
-	removed, err := c.queueClient.Remove(ctx, jobPriority)
+	removed, err := c.queueClient.PQDelete(ctx, jobPriority)
 	if err != nil {
 		logger.Error(err, "failed to remove batch from queue", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -394,7 +394,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 				TTL:  c.config.BatchTTLSeconds,
 			},
 		}
-		_, err = c.eventClient.ProducerSendEvents(ctx, event)
+		_, err = c.eventClient.ECProducerSendEvents(ctx, event)
 		if err != nil {
 			logger.Error(err, "failed to send cancel event", "batch_id", batchID)
 			common.WriteInternalServerError(ctx, w)
@@ -410,7 +410,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job.Status = updatedStatusData
-	if err := c.dbClient.Update(ctx, job); err != nil {
+	if err := c.dbClient.DBUpdate(ctx, job); err != nil {
 		logger.Error(err, "failed to update batch in database", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
 		return

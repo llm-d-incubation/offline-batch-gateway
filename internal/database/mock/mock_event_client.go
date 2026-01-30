@@ -41,7 +41,7 @@ func NewMockBatchEventChannelClient() *MockBatchEventChannelClient {
 	}
 }
 
-func (m *MockBatchEventChannelClient) ConsumerGetChannel(ctx context.Context, ID string) (*api.BatchEventsChan, error) {
+func (m *MockBatchEventChannelClient) ECConsumerGetChannel(ctx context.Context, ID string) (*api.BatchEventsChan, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -86,7 +86,7 @@ func (m *MockBatchEventChannelClient) ConsumerGetChannel(ctx context.Context, ID
 	}, nil
 }
 
-func (m *MockBatchEventChannelClient) ProducerSendEvents(ctx context.Context, events []api.BatchEvent) ([]string, error) {
+func (m *MockBatchEventChannelClient) ECProducerSendEvents(ctx context.Context, events []api.BatchEvent) ([]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

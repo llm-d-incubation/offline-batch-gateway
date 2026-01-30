@@ -34,26 +34,26 @@ func NewMockBatchDBClient() *MockBatchDBClient {
 	return &MockBatchDBClient{}
 }
 
-func (m *MockBatchDBClient) Store(ctx context.Context, job *api.BatchJob) (string, error) {
+func (m *MockBatchDBClient) DBStore(ctx context.Context, job *api.BatchItem) (string, error) {
 	m.jobs.Store(job.ID, job)
 	return job.ID, nil
 }
 
-func (m *MockBatchDBClient) Get(ctx context.Context, IDs []string, tags []string, tagsLogicalCond api.TagsLogicalCond, includeStatic bool, start, limit int) ([]*api.BatchJob, int, error) {
-	var results []*api.BatchJob
+func (m *MockBatchDBClient) DBGet(ctx context.Context, IDs []string, tags []string, tagsLogicalCond api.TagsLogicalCond, includeStatic bool, start, limit int) ([]*api.BatchItem, int, error) {
+	var results []*api.BatchItem
 
 	// If IDs are specified, get by IDs
 	if len(IDs) > 0 {
 		for _, id := range IDs {
 			if value, ok := m.jobs.Load(id); ok {
-				if job, ok := value.(*api.BatchJob); ok {
+				if job, ok := value.(*api.BatchItem); ok {
 					results = append(results, job)
 				}
 			}
 		}
 	} else {
 		m.jobs.Range(func(key, value any) bool {
-			if job, ok := value.(*api.BatchJob); ok {
+			if job, ok := value.(*api.BatchItem); ok {
 				results = append(results, job)
 				if len(results) >= limit && limit > 0 {
 					return false
@@ -66,7 +66,7 @@ func (m *MockBatchDBClient) Get(ctx context.Context, IDs []string, tags []string
 	return results, 0, nil
 }
 
-func (m *MockBatchDBClient) Update(ctx context.Context, job *api.BatchJob) error {
+func (m *MockBatchDBClient) DBUpdate(ctx context.Context, job *api.BatchItem) error {
 	if _, ok := m.jobs.Load(job.ID); !ok {
 		return fmt.Errorf("cannot update job with ID '%s': job doesn't exist", job.ID)
 	}
@@ -74,7 +74,7 @@ func (m *MockBatchDBClient) Update(ctx context.Context, job *api.BatchJob) error
 	return nil
 }
 
-func (m *MockBatchDBClient) Delete(ctx context.Context, IDs []string) ([]string, error) {
+func (m *MockBatchDBClient) DBDelete(ctx context.Context, IDs []string) ([]string, error) {
 	var deleted []string
 	for _, id := range IDs {
 		if _, ok := m.jobs.LoadAndDelete(id); ok {

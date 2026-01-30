@@ -118,7 +118,7 @@ func TestBatchHandler(t *testing.T) {
 				Failed:    0,
 			},
 		})
-		dbClient.Store(context.Background(), &api.BatchJob{
+		dbClient.DBStore(context.Background(), &api.BatchItem{
 			ID:     batchID,
 			SLO:    time.Now().UTC().Add(24 * time.Hour),
 			TTL:    86400,
@@ -173,7 +173,7 @@ func TestBatchHandler(t *testing.T) {
 					Failed:    0,
 				},
 			})
-			dbClient.Store(context.Background(), &api.BatchJob{
+			dbClient.DBStore(context.Background(), &api.BatchItem{
 				ID:     batchID,
 				SLO:    time.Now().UTC().Add(24 * time.Hour),
 				TTL:    86400,
@@ -241,7 +241,7 @@ func TestBatchHandler(t *testing.T) {
 				Failed:    0,
 			},
 		})
-		dbClient.Store(context.Background(), &api.BatchJob{
+		dbClient.DBStore(context.Background(), &api.BatchItem{
 			ID:     batchID,
 			SLO:    time.Now().UTC().Add(24 * time.Hour),
 			TTL:    86400,
@@ -318,7 +318,7 @@ func BenchmarkBatchHandler(b *testing.B) {
 				Failed:    0,
 			},
 		})
-		dbClient.Store(context.Background(), &api.BatchJob{
+		dbClient.DBStore(context.Background(), &api.BatchItem{
 			ID:     batchID,
 			SLO:    time.Now().UTC().Add(24 * time.Hour),
 			TTL:    86400,
@@ -355,7 +355,7 @@ func BenchmarkBatchHandler(b *testing.B) {
 					Failed:    0,
 				},
 			})
-			dbClient.Store(context.Background(), &api.BatchJob{
+			dbClient.DBStore(context.Background(), &api.BatchItem{
 				ID:     batchID,
 				SLO:    time.Now().UTC().Add(24 * time.Hour),
 				TTL:    86400,
@@ -395,7 +395,7 @@ func BenchmarkBatchHandler(b *testing.B) {
 					Failed:    0,
 				},
 			})
-			dbClient.Store(context.Background(), &api.BatchJob{
+			dbClient.DBStore(context.Background(), &api.BatchItem{
 				ID:     batchID,
 				SLO:    time.Now().UTC().Add(24 * time.Hour),
 				TTL:    86400,
