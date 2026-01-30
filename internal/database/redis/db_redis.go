@@ -31,7 +31,6 @@ import (
 	"github.com/llm-d-incubation/batch-gateway/internal/util/logging"
 	uredis "github.com/llm-d-incubation/batch-gateway/internal/util/redis"
 	goredis "github.com/redis/go-redis/v9"
-	"gorm.io/gorm/logger"
 	"k8s.io/klog/v2"
 )
 
@@ -47,6 +46,7 @@ const (
 	storeKeysPrefix      = keysPrefix + "store:"
 	queueKeysPrefix      = keysPrefix + "queue:"
 	eventKeysPrefix      = keysPrefix + "event:"
+	statusKeysPrefix     = keysPrefix + "status:"
 	priorityQueueKeyName = queueKeysPrefix + "priority"
 	storeKeysPattern     = storeKeysPrefix + "*"
 	routineStopTimeout   = 20 * time.Second
@@ -128,15 +128,15 @@ func (c *BatchDSClientRedis) DBStore(ctx context.Context, item *db_api.BatchItem
 	}
 	logger := klog.FromContext(ctx)
 	if item == nil {
-		err = fmt.Errorf("empty batch item")
-		logger.Error(err, "Store:")
+		err = fmt.Errorf("item is empty")
+		logger.Error(err, "DBStore:")
 		return
 	}
 	if err = item.IsValid(); err != nil {
-		logger.Error(err, "Store: item is invalid")
+		logger.Error(err, "DBStore: item is invalid")
 		return
 	}
-	logger = logger.WithValues("batchId", item.ID)
+	logger = logger.WithValues("ID", item.ID)
 
 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
 	res, err := redisScriptStore.Run(cctx, c.redisClient,
@@ -146,15 +146,15 @@ func (c *BatchDSClientRedis) DBStore(ctx context.Context, item *db_api.BatchItem
 		item.TTL).Text()
 	ccancel()
 	if err != nil {
-		logger.Error(err, "Store: script failed")
+		logger.Error(err, "DBStore: script failed")
 		return "", err
 	}
 	if len(res) > 0 {
 		err = fmt.Errorf("%s", res)
-		logger.Error(err, "Store: script failed")
+		logger.Error(err, "DBStore: script failed")
 		return
 	}
-	logger.Info("Store: succeeded")
+	logger.Info("DBStore: succeeded")
 	return item.ID, nil
 }
 
@@ -165,13 +165,13 @@ func (c *BatchDSClientRedis) DBUpdate(ctx context.Context, item *db_api.BatchIte
 	}
 	logger := klog.FromContext(ctx)
 	if item == nil || len(item.ID) == 0 {
-		err = fmt.Errorf("empty or invalid batch item")
-		logger.Error(err, "Update:")
+		err = fmt.Errorf("item is empty or invalid")
+		logger.Error(err, "DBUpdate:")
 		return
 	}
-	logger = logger.WithValues("batchId", item.ID)
+	logger = logger.WithValues("ID", item.ID)
 	if len(item.Status) == 0 && len(item.Tags) == 0 {
-		logger.Info("Update: nothing to update")
+		logger.Info("DBUpdate: nothing to update")
 		return
 	}
 
@@ -197,17 +197,17 @@ func (c *BatchDSClientRedis) DBUpdate(ctx context.Context, item *db_api.BatchIte
 	})
 	ccancel()
 	if err != nil {
-		logger.Error(err, "Update: Pipelined failed")
+		logger.Error(err, "DBUpdate: Pipelined failed")
 		return err
 	}
 	for _, cmd := range cmds {
 		if err = cmd.Err(); err != nil {
-			logger.Error(err, "Update: Command inside pipeline failed")
+			logger.Error(err, "DBUpdate: Command inside pipeline failed")
 			return
 		}
 	}
 
-	logger.Info("Update: succeeded", "updatedStatus", updatedStatus, "updatedTags", updatedTags)
+	logger.Info("DBUpdate: succeeded", "updatedStatus", updatedStatus, "updatedTags", updatedTags)
 
 	return
 }
@@ -233,13 +233,13 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 	})
 	ccancel()
 	if err != nil {
-		logger.Error(err, "Delete: Pipelined failed")
+		logger.Error(err, "DBDelete: Pipelined failed")
 		return nil, err
 	}
 	for _, cmd := range cmds {
 		if cmd.Err() != nil && cmd.Err() != goredis.Nil {
 			err = cmd.Err()
-			logger.Error(err, "Delete: Command inside pipeline failed")
+			logger.Error(err, "DBDelete: Command inside pipeline failed")
 			break
 		}
 	}
@@ -250,7 +250,7 @@ func (c *BatchDSClientRedis) DBDelete(ctx context.Context, IDs []string) (
 		}
 	}
 
-	logger.Info("Delete:", "nItems", len(deletedIDs), "IDs", deletedIDs)
+	logger.Info("DBDelete: succeeded", "nItems", len(deletedIDs), "IDs", deletedIDs)
 
 	return
 }
@@ -283,7 +283,7 @@ func (c *BatchDSClientRedis) DBGet(
 		})
 		ccancel()
 		if err != nil {
-			logger.Error(err, "Get: Pipelined failed")
+			logger.Error(err, "DBGet: Pipelined failed")
 			return nil, 0, err
 		}
 
@@ -292,14 +292,14 @@ func (c *BatchDSClientRedis) DBGet(
 		for _, cmd := range cmds {
 			if cmd.Err() != nil {
 				if cmd.Err() != goredis.Nil {
-					logger.Error(cmd.Err(), "Get: HMGet failed")
+					logger.Error(cmd.Err(), "DBGet: HMGet failed")
 				}
 				continue
 			}
 			hgetRes, ok := cmd.(*goredis.SliceCmd)
 			if !ok {
 				err := fmt.Errorf("unexpected result type from HMGet: %T", cmd)
-				logger.Error(err, "Get:")
+				logger.Error(err, "DBGet:")
 				return nil, 0, err
 			}
 			item, err := dbItemFromHget(hgetRes.Val(), includeStatic, logger)
@@ -317,7 +317,7 @@ func (c *BatchDSClientRedis) DBGet(
 		cond, found := db_api.TagsLogicalCondNames[tagsLogicalCond]
 		if !found {
 			err = fmt.Errorf("invalid logical condition value: %d", tagsLogicalCond)
-			logger.Error(err, "Get:")
+			logger.Error(err, "DBGet:")
 			return
 		}
 		var res []interface{}
@@ -327,24 +327,24 @@ func (c *BatchDSClientRedis) DBGet(
 			ctags, strconv.FormatBool(includeStatic), storeKeysPattern, cond, start, limit).Slice()
 		ccancel()
 		if err != nil {
-			logger.Error(err, "Get: script failed")
+			logger.Error(err, "DBGet: script failed")
 			return
 		}
 		if len(res) != 2 {
 			err = fmt.Errorf("unexpected result from script")
-			logger.Error(err, "Get:")
+			logger.Error(err, "DBGet:")
 			return
 		}
 		resItems, ok := res[1].([]interface{})
 		if !ok {
 			err = fmt.Errorf("unexpected result type from script: %T", res[1])
-			logger.Error(err, "Get:")
+			logger.Error(err, "DBGet:")
 			return
 		}
 		resCursor, ok := res[0].(int64)
 		if !ok {
 			err = fmt.Errorf("unexpected result type from script: %T", res[0])
-			logger.Error(err, "Get:")
+			logger.Error(err, "DBGet:")
 			return
 		}
 		items = make([]*db_api.BatchItem, 0, len(resItems))
@@ -360,7 +360,7 @@ func (c *BatchDSClientRedis) DBGet(
 		cursor = int(resCursor)
 	}
 
-	logger.Info("Get: succeeded", "nItems", len(items))
+	logger.Info("DBGet: succeeded", "nItems", len(items))
 
 	return
 }
@@ -462,7 +462,7 @@ func (c *BatchDSClientRedis) PQEnqueue(ctx context.Context, item *db_api.BatchJo
 		logger.Error(err, "PQEnqueue: item is invalid")
 		return
 	}
-	logger = logger.WithValues("batchId", item.ID)
+	logger = logger.WithValues("ID", item.ID)
 
 	data, lerr := json.Marshal(item)
 	if lerr != nil {
@@ -491,6 +491,7 @@ func (c *BatchDSClientRedis) PQEnqueue(ctx context.Context, item *db_api.BatchJo
 		logger.Error(err, "PQEnqueue: redis ZAddNX failed")
 		return
 	}
+
 	logger.Info("PQEnqueue: succeeded")
 	return
 }
@@ -510,7 +511,7 @@ func (c *BatchDSClientRedis) PQDelete(ctx context.Context, item *db_api.BatchJob
 		logger.Error(err, "PQDelete: item is invalid")
 		return
 	}
-	logger = logger.WithValues("batchId", item.ID)
+	logger = logger.WithValues("ID", item.ID)
 
 	if err = item.IsValid(); err != nil {
 		logger.Error(err, "PQDelete: validation failed")
@@ -530,6 +531,7 @@ func (c *BatchDSClientRedis) PQDelete(ctx context.Context, item *db_api.BatchJob
 		return
 	}
 	nDeleted = int(res.Val())
+
 	logger.Info("PQDelete: succeeded")
 	return
 }
@@ -581,7 +583,7 @@ func (c *BatchDSClientRedis) PQDequeue(ctx context.Context, timeout time.Duratio
 		jobPriorities = append(jobPriorities, item)
 	}
 
-	logger.Info("PQDequeue: succeeded")
+	logger.Info("PQDequeue: succeeded", "nItems", len(jobPriorities))
 	return
 }
 
@@ -600,21 +602,20 @@ func (c *BatchDSClientRedis) ECConsumerGetChannel(ctx context.Context, ID string
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	logger := klog.FromContext(ctx)
+	logger := klog.FromContext(ctx).WithValues("ID", ID)
 
 	// Create the events listener for the job.
 	lctx, lcancel := context.WithCancel(context.Background()) // Use a background context as this should be independent of the context of this call.
-	llogger := logger.WithValues("jobID", ID)
 	eventChan := make(chan db_api.BatchEvent, eventChanSize)
 	stopChan := make(chan any, 1)
 	closeFn := func() {
-		llogger.Info("Listener: close start")
+		logger.Info("Listener: close start")
 		lcancel() // Signal for listener termination.
 		select {
 		case <-stopChan: // Wait for listener termination, with a timeout.
 		case <-time.After(routineStopTimeout):
 		}
-		llogger.Info("Listener: close end")
+		logger.Info("Listener: close end")
 	}
 	batchEventsChan = &db_api.BatchEventsChan{
 		ID:      ID,
@@ -623,26 +624,26 @@ func (c *BatchDSClientRedis) ECConsumerGetChannel(ctx context.Context, ID string
 	}
 	go func() {
 		eventsKeyId := getKeyForEvent(ID)
-		llogger.Info("Listener: start", "eventsKeyId", eventsKeyId)
+		logger.Info("Listener: start", "eventsKeyId", eventsKeyId)
 		for {
 			select {
 			case <-lctx.Done():
-				llogger.Info("Listener: received termination signal")
+				logger.Info("Listener: received termination signal")
 				close(eventChan)
 				stopChan <- struct{}{}
 				return
 			default:
-				llogger.V(logging.DEBUG).Info("Listener: Start BLMPop")
+				logger.V(logging.DEBUG).Info("Listener: Start BLMPop")
 				lcctx, lccancel := context.WithTimeout(lctx, c.timeout+2*time.Second)
 				_, events, err := c.redisClient.BLMPop(lcctx, c.timeout, "left", int64(eventReadCount), eventsKeyId).Result()
 				lccancel()
-				llogger.V(logging.DEBUG).Info("Listener: Finished BLMPop")
+				logger.V(logging.DEBUG).Info("Listener: Finished BLMPop")
 				if err != nil {
 					if unrecognizedBlockingError(err) {
-						llogger.Error(err, "Listener: BLMPop failed")
+						logger.Error(err, "Listener: BLMPop failed")
 						cerr := c.redisClientChecker.Check(ctx)
 						if cerr != nil {
-							llogger.Error(err, "Listener: ClientCheck failed")
+							logger.Error(err, "Listener: ClientCheck failed")
 						}
 					}
 					continue
@@ -650,7 +651,7 @@ func (c *BatchDSClientRedis) ECConsumerGetChannel(ctx context.Context, ID string
 				for _, event := range events {
 					eventi, err := strconv.Atoi(event)
 					if err != nil {
-						llogger.Error(err, "Listener: strconv failed")
+						logger.Error(err, "Listener: strconv failed")
 						continue
 					}
 					select {
@@ -658,9 +659,9 @@ func (c *BatchDSClientRedis) ECConsumerGetChannel(ctx context.Context, ID string
 						ID:   ID,
 						Type: db_api.BatchEventType(eventi),
 					}:
-						llogger.Info("Listener: dispatched event", "type", event)
+						logger.Info("Listener: dispatched event", "type", event)
 					case <-time.After(eventChanTimeout):
-						llogger.Error(fmt.Errorf("couldn't send event"), "Listener:", "type", event)
+						logger.Error(fmt.Errorf("couldn't send event"), "Listener:", "type", event)
 					}
 				}
 			}
@@ -678,17 +679,18 @@ func getKeyForEvent(key string) string {
 func (c *BatchDSClientRedis) ECProducerSendEvents(ctx context.Context, events []db_api.BatchEvent) (
 	sentIDs []string, err error) {
 
-	if logger == nil {
-		logger = logging.GetInstance()
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	logger := klog.FromContext(ctx)
 	if len(events) == 0 {
 		err = fmt.Errorf("empty events")
-		logger.Error(err, "SendEvent:")
+		logger.Error(err, "ECProducerSendEvents:")
 		return
 	}
 	for _, event := range events {
 		if err = event.IsValid(); err != nil {
-			logger.Error(err, "SendEvent: invalid event")
+			logger.Error(err, "ECProducerSendEvents: invalid event")
 			return
 		}
 	}
@@ -707,9 +709,10 @@ func (c *BatchDSClientRedis) ECProducerSendEvents(ctx context.Context, events []
 	})
 	ccancel()
 	if err != nil {
-		logger.Error(err, "SendEvent: Pipelined failed")
+		logger.Error(err, "ECProducerSendEvents: Pipelined failed")
 		return
 	}
+	sentIDs = make([]string, 0, len(resMap))
 	for id, res := range resMap {
 		if res != nil {
 			if res.Err() == nil && res.Val() > 0 {
@@ -720,171 +723,107 @@ func (c *BatchDSClientRedis) ECProducerSendEvents(ctx context.Context, events []
 		}
 	}
 
-	logger.Info("SendEvent:", "nJobs", len(sentIDs), "sentIDs", sentIDs)
-
+	logger.Info("ECProducerSendEvents: succeeded", "nIDs", len(sentIDs), "sentIDs", sentIDs)
 	return
 }
 
-// func (c *BatchDSClientRedis) GetForProcessing(
-// 	ctx context.Context, timeout time.Duration, maxJobs int) (
-// 	resJobs []*db_api.BatchJob, resEvents []*db_api.BatchEventsChan, err error) {
+func getKeyForStatus(key string) string {
+	return statusKeysPrefix + key
+}
 
-// 	// Get the job records.
-// 	cctx, ccancel = context.WithTimeout(ctx, timeout)
-// 	cmds, err := c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
-// 		for _, val := range vals {
-// 			pipe.HMGet(cctx, getKeyForStore(val.Member.(string)),
-// 				fieldNameId, fieldNameSlo, fieldNameTags, fieldNameStatus, fieldNameSpec)
-// 		}
-// 		return nil
-// 	})
-// 	ccancel()
-// 	if err != nil {
-// 		logger.Error(err, "GetForProcessing: Pipelined failed")
-// 		return nil, nil, err
-// 	}
+func (c *BatchDSClientRedis) STSet(ctx context.Context, ID string, TTL int, data []byte) (err error) {
 
-// 	// Process the jobs.
-// 	for _, cmd := range cmds {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+	if len(ID) == 0 {
+		err = fmt.Errorf("empty ID")
+		logger.Error(err, "STSet:")
+		return
+	}
+	logger = logger.WithValues("ID", ID)
+	if len(data) == 0 {
+		err = fmt.Errorf("empty data")
+		logger.Error(err, "STSet:")
+		return
+	}
 
-// 		if cmd.Err() != nil {
-// 			if cmd.Err() != goredis.Nil {
-// 				logger.Error(cmd.Err(), "GetForProcessing: HMGet failed")
-// 			}
-// 			continue
-// 		}
-// 		hgetRes, ok := cmd.(*goredis.SliceCmd)
-// 		if !ok {
-// 			err := fmt.Errorf("unexpected result type from HMGet: %T", cmd)
-// 			logger.Error(err, "GetForProcessing:")
-// 			return nil, nil, err
-// 		}
-// 		job, err := dbJobFromHget(hgetRes.Val(), true, logger)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 		if job != nil {
-// 			// Add the job to the returned list.
-// 			resJobs = append(resJobs, job)
-// 			// Create the events listener for the job.
-// 			lctx, lcancel := context.WithCancel(context.Background()) // Use a background context as this should be independent of the context of this call.
-// 			llogger := logger.WithValues("jobID", job.ID)
-// 			eventChan := make(chan db_api.BatchEvent, eventChanSize)
-// 			stopChan := make(chan any, 1)
-// 			closeFn := func() {
-// 				llogger.Info("Listener: close start")
-// 				lcancel() // Signal for listener termination.
-// 				select {
-// 				case <-stopChan: // Wait for listener termination, with a timeout.
-// 				case <-time.After(routineStopTimeout):
-// 				}
-// 				llogger.Info("Listener: close end")
-// 			}
-// 			batchEventChan := &db_api.BatchEventsChan{
-// 				ID:      job.ID,
-// 				Events:  eventChan,
-// 				CloseFn: closeFn,
-// 			}
-// 			resEvents = append(resEvents, batchEventChan)
-// 			go func() {
-// 				eventsKeyId := getKeyForEvent(job.ID)
-// 				llogger.Info("Listener: start", "eventsKeyId", eventsKeyId)
-// 				for {
-// 					select {
-// 					case <-lctx.Done():
-// 						llogger.Info("Listener: received termination signal")
-// 						close(eventChan)
-// 						stopChan <- struct{}{}
-// 						return
-// 					default:
-// 						llogger.Debug("Listener: Start BLMPop")
-// 						lcctx, lccancel := context.WithTimeout(lctx, c.timeout+2*time.Second)
-// 						_, events, err := c.redisClient.BLMPop(lcctx, c.timeout, "left", int64(eventReadCount), eventsKeyId).Result()
-// 						lccancel()
-// 						llogger.Debug("Listener: Finished BLMPop")
-// 						if err != nil {
-// 							if unrecognizedBlockingError(err) {
-// 								llogger.Error(err, "Listener: BLMPop failed")
-// 								cerr := c.redisClientChecker.Check(ctx, llogger)
-// 								if cerr != nil {
-// 									llogger.Error(err, "Listener: ClientCheck failed")
-// 								}
-// 							}
-// 							continue
-// 						}
-// 						for _, event := range events {
-// 							eventi, err := strconv.Atoi(event)
-// 							if err != nil {
-// 								llogger.Error(err, "Listener: strconv failed")
-// 								continue
-// 							}
-// 							select {
-// 							case eventChan <- db_api.BatchEvent{
-// 								ID:   job.ID,
-// 								Type: db_api.BatchEventType(eventi),
-// 							}:
-// 								llogger.Info("Listener: dispatched event", "type", event)
-// 							case <-time.After(eventChanTimeout):
-// 								llogger.Error(fmt.Errorf("couldn't send event"), "Listener:", "type", event)
-// 							}
-// 						}
-// 					}
-// 				}
-// 			}()
-// 		}
-// 	}
+	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
+	res := c.redisClient.SetEx(cctx, getKeyForStatus(ID), data, time.Duration(int64(TTL)*int64(time.Second)))
+	ccancel()
+	if res == nil {
+		err = fmt.Errorf("nil redis command result")
+		logger.Error(err, "STSet:")
+		return
+	}
+	if err = res.Err(); err != nil {
+		logger.Error(err, "STSet: redis command error")
+		return
+	}
 
-// 	logger.Info("GetForProcessing: succeeded", "nJobs", len(resJobs))
+	logger.Info("STSet: succeeded")
+	return
+}
 
-// 	return
-// }
+func (c *BatchDSClientRedis) STGet(ctx context.Context, ID string) (data []byte, err error) {
 
-// func (c *BatchDSClientRedis) SendEvent(ctx context.Context, events []db_api.BatchEvent) (
-// 	sentIDs []string, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+	if len(ID) == 0 {
+		err = fmt.Errorf("empty ID")
+		logger.Error(err, "STGet:")
+		return
+	}
+	logger = logger.WithValues("ID", ID)
 
-// 	// if logger == nil {
-// 	// 	logger = logging.GetInstance()
-// 	// }
-// 	if len(events) == 0 {
-// 		err = fmt.Errorf("empty events")
-// 		logger.Error(err, "SendEvent:")
-// 		return
-// 	}
-// 	for _, event := range events {
-// 		if err = event.IsValid(); err != nil {
-// 			logger.Error(err, "SendEvent: invalid event")
-// 			return
-// 		}
-// 	}
+	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
+	res := c.redisClient.Get(cctx, getKeyForStatus(ID))
+	ccancel()
+	if res == nil {
+		err = fmt.Errorf("nil redis command result")
+		logger.Error(err, "STGet:")
+		return
+	}
+	if err = res.Err(); err != nil {
+		logger.Error(err, "STGet: redis command error")
+		return
+	}
+	data = []byte(res.Val())
 
-// 	resMap := make(map[string]*goredis.IntCmd)
-// 	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
-// 	_, err = c.redisClient.Pipelined(cctx, func(pipe goredis.Pipeliner) error {
-// 		for _, event := range events {
-// 			eventTypeStr := strconv.Itoa(int(event.Type))
-// 			key := getKeyForEvent(event.ID)
-// 			res := pipe.RPush(cctx, key, eventTypeStr)
-// 			resMap[event.ID] = res
-// 			pipe.Expire(cctx, key, time.Duration(int64(event.TTL)*int64(time.Second)))
-// 		}
-// 		return nil
-// 	})
-// 	ccancel()
-// 	if err != nil {
-// 		logger.Error(err, "SendEvent: Pipelined failed")
-// 		return
-// 	}
-// 	for id, res := range resMap {
-// 		if res != nil {
-// 			if res.Err() == nil && res.Val() > 0 {
-// 				sentIDs = append(sentIDs, id)
-// 			} else if res.Err() != nil && err == nil {
-// 				err = res.Err()
-// 			}
-// 		}
-// 	}
+	logger.Info("STGet: succeeded", "len(data)", len(data))
+	return
+}
 
-// 	logger.Info("SendEvent:", "nJobs", len(sentIDs), "sentIDs", sentIDs)
+func (c *BatchDSClientRedis) STDelete(ctx context.Context, ID string) (nDeleted int, err error) {
 
-// 	return
-// }
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	logger := klog.FromContext(ctx)
+	if len(ID) == 0 {
+		err = fmt.Errorf("empty ID")
+		logger.Error(err, "STDelete:")
+		return
+	}
+	logger = logger.WithValues("ID", ID)
+
+	cctx, ccancel := context.WithTimeout(ctx, c.timeout)
+	res := c.redisClient.Del(cctx, getKeyForStatus(ID))
+	ccancel()
+	if res == nil {
+		err = fmt.Errorf("nil redis command result")
+		logger.Error(err, "STDelete:")
+		return
+	}
+	if err = res.Err(); err != nil {
+		logger.Error(err, "STDelete: redis command error")
+		return
+	}
+	nDeleted = int(res.Val())
+
+	logger.Info("STDelete: succeded", "nDeleted", nDeleted)
+	return
+}
