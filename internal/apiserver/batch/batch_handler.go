@@ -186,7 +186,7 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := c.queueClient.PQEnqueue(ctx, bjp); err != nil {
 		logger.Error(err, "failed to enqueue batch job priority")
-		if _, delErr := c.dbClient.Delete(ctx, []string{batchID}); delErr != nil {
+		if _, delErr := c.dbClient.DBDelete(ctx, []string{batchID}); delErr != nil {
 			logger.Error(delErr, "failed to cleanup batch job after enqueue failure", "batch_id", batchID)
 		}
 		common.WriteInternalServerError(ctx, w)
@@ -369,7 +369,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	jobPriority := &api.BatchJobPriority{
 		ID: batchID,
 	}
-	removed, err := c.queueClient.Remove(ctx, jobPriority)
+	removed, err := c.queueClient.PQDelete(ctx, jobPriority)
 	if err != nil {
 		logger.Error(err, "failed to remove batch from queue", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
@@ -394,7 +394,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 				TTL:  c.config.BatchTTLSeconds,
 			},
 		}
-		_, err = c.eventClient.ProducerSendEvents(ctx, event)
+		_, err = c.eventClient.ECProducerSendEvents(ctx, event)
 		if err != nil {
 			logger.Error(err, "failed to send cancel event", "batch_id", batchID)
 			common.WriteInternalServerError(ctx, w)
@@ -417,7 +417,7 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove the job id from the priority queue.
-	jobPriority := &api.BatchJobPriority{
+	jobPriority = &api.BatchJobPriority{
 		ID: batchID,
 	}
 	c.queueClient.PQDelete(ctx, jobPriority)
