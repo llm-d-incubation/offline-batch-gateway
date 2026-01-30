@@ -135,6 +135,8 @@ type BatchPriorityQueueClient interface {
 		jobPriorities []*BatchJobPriority, err error)
 
 	// PQDelete deletes a job priority object from the queue.
+	// It returns the number of deleted objects.
+	// An error is returned only if the deletion operation failed.
 	PQDelete(ctx context.Context, jobPriority *BatchJobPriority) (nDeleted int, err error)
 }
 

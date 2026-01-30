@@ -19,7 +19,6 @@ package mock
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -111,7 +110,7 @@ func (m *MockBatchPriorityQueueClient) PQDelete(ctx context.Context, jobPriority
 		}
 	}
 
-	return 0, fmt.Errorf("job with ID '%s' not found in queue", jobPriority.ID)
+	return 0, nil
 }
 
 func (m *MockBatchPriorityQueueClient) GetContext(parentCtx context.Context, timeLimit time.Duration) (context.Context, context.CancelFunc) {

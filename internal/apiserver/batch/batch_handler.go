@@ -186,6 +186,9 @@ func (c *BatchApiHandler) CreateBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := c.queueClient.PQEnqueue(ctx, bjp); err != nil {
 		logger.Error(err, "failed to enqueue batch job priority")
+		if _, delErr := c.dbClient.Delete(ctx, []string{batchID}); delErr != nil {
+			logger.Error(delErr, "failed to cleanup batch job after enqueue failure", "batch_id", batchID)
+		}
 		common.WriteInternalServerError(ctx, w)
 		return
 	}
@@ -362,18 +365,50 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update status to cancelling
-	batch.Status = openai.BatchStatusCancelling
-	currentTime := time.Now().UTC().Unix()
-	batch.CancellingAt = &currentTime
+	// Try to remove from the priority queue first
+	jobPriority := &api.BatchJobPriority{
+		ID: batchID,
+	}
+	removed, err := c.queueClient.Remove(ctx, jobPriority)
+	if err != nil {
+		logger.Error(err, "failed to remove batch from queue", "batch_id", batchID)
+		common.WriteInternalServerError(ctx, w)
+		return
+	}
 
+	if removed > 0 {
+		// Job was in queue (not yet being processed) - directly cancel it
+		batch.Status = openai.BatchStatusCancelled
+		cancelledAt := time.Now().UTC().Unix()
+		batch.CancelledAt = &cancelledAt
+	} else {
+		// Job is being processed - mark as cancelling and send cancel event
+		batch.Status = openai.BatchStatusCancelling
+		cancellingAt := time.Now().UTC().Unix()
+		batch.CancellingAt = &cancellingAt
+
+		event := []api.BatchEvent{
+			{
+				ID:   batchID,
+				Type: api.BatchEventCancel,
+				TTL:  c.config.BatchTTLSeconds,
+			},
+		}
+		_, err = c.eventClient.ProducerSendEvents(ctx, event)
+		if err != nil {
+			logger.Error(err, "failed to send cancel event", "batch_id", batchID)
+			common.WriteInternalServerError(ctx, w)
+			return
+		}
+	}
+
+	// Update batch status in database
 	updatedStatusData, err := json.Marshal(batch.BatchStatusInfo)
 	if err != nil {
 		logger.Error(err, "failed to marshal updated status", "batch_id", batchID)
 		common.WriteInternalServerError(ctx, w)
 		return
 	}
-
 	job.Status = updatedStatusData
 	if err := c.dbClient.DBUpdate(ctx, job); err != nil {
 		logger.Error(err, "failed to update batch in database", "batch_id", batchID)
