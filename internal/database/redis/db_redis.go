@@ -51,6 +51,7 @@ const (
 	storeKeysPattern     = storeKeysPrefix + "*"
 	routineStopTimeout   = 20 * time.Second
 	eventChanTimeout     = 10 * time.Second
+	cmdTimeout           = 20 * time.Second
 	tagsSep              = ";;"
 	eventChanSize        = 100
 	logFreqDefault       = 10 * time.Minute
@@ -75,7 +76,7 @@ type BatchDSClientRedis struct {
 	idleLogLast        time.Time
 }
 
-func NewBatchDSClientRedis(ctx context.Context, conf *uredis.RedisClientConfig) (
+func NewBatchDSClientRedis(ctx context.Context, conf *uredis.RedisClientConfig, opTimeout time.Duration) (
 	*BatchDSClientRedis, error) {
 
 	if ctx == nil {
@@ -87,16 +88,19 @@ func NewBatchDSClientRedis(ctx context.Context, conf *uredis.RedisClientConfig) 
 		logger.Error(err, "NewBatchDSClientRedis:")
 		return nil, err
 	}
+	if opTimeout <= 0 {
+		opTimeout = cmdTimeout
+	}
 	redisClient, err := uredis.NewRedisClient(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
-	redisClientChecker := uredis.NewRedisClientChecker(redisClient, keysPrefix, conf.ServiceName, conf.Timeout)
+	redisClientChecker := uredis.NewRedisClientChecker(redisClient, keysPrefix, conf.ServiceName, opTimeout)
 	logger.Info("NewBatchDSClientRedis: succeeded", "serviceName", conf.ServiceName)
 	return &BatchDSClientRedis{
 		redisClient:        redisClient,
 		redisClientChecker: redisClientChecker,
-		timeout:            conf.Timeout,
+		timeout:            opTimeout,
 		idleLogFreq:        logFreqDefault,
 		idleLogLast:        time.Now(),
 	}, nil

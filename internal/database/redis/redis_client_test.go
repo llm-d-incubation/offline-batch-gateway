@@ -46,7 +46,7 @@ func setupRedisClient(t *testing.T, redisUrl, redisCaCert string) *dbredis.Batch
 			CaCertFile: redisCaCert,
 		}
 	}
-	db_rds, err := dbredis.NewBatchDSClientRedis(context.Background(), cfg)
+	db_rds, err := dbredis.NewBatchDSClientRedis(context.Background(), cfg, 0)
 	if err != nil {
 		t.Fatalf("Failed to create db redis client: %v", err)
 	}
