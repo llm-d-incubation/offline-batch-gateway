@@ -1,0 +1,207 @@
+# Global settings
+global:
+  imagePullSecrets: []
+
+# API Server configuration
+apiserver:
+  enabled: true
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/llm-d/batch-gateway-apiserver
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  nameOverride: ""
+  fullnameOverride: ""
+
+  serviceAccount:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+  podAnnotations: {}
+  podLabels: {}
+
+  # Pod security context
+  # For OpenShift, set podSecurityContext: {} to use SCC-assigned UIDs
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context (minimal, works with OpenShift)
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    annotations: {}
+
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  volumes: []
+  volumeMounts: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # API Server specific configuration
+  config:
+    host: ""
+    port: "8000"
+    batchTTLSeconds: 2592000
+
+  # TLS/SSL Configuration
+  tls:
+    enabled: false
+    secretName: ""
+    cert: ""
+    key: ""
+    certManager:
+      enabled: false
+      issuerName: ""
+      issuerKind: ClusterIssuer
+
+  # Logging configuration
+  logging:
+    verbosity: 2
+
+# Processor configuration
+processor:
+  enabled: false
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/llm-d/batch-gateway-processor
+    pullPolicy: IfNotPresent
+    tag: ""
+
+  nameOverride: ""
+  fullnameOverride: ""
+
+  serviceAccount:
+    create: true
+    automount: true
+    annotations: {}
+    name: ""
+
+  podAnnotations: {}
+  podLabels: {}
+
+  # Pod security context
+  # For OpenShift, set podSecurityContext: {} to use SCC-assigned UIDs
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+
+  # Container security context (minimal, works with OpenShift)
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: metrics
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: metrics
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  volumes: []
+  volumeMounts: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Processor specific configuration
+  config:
+    addr: ":9090"
+    taskWaitTime: "1s"
+    pollInterval: "5s"
+    numWorkers: 20
+    maxJobConcurrency: 10
+    queueTimeBucket:
+      bucketStart: 0.1
+      bucketFactor: 2
+      bucketCount: 10
+    processTimeBucket:
+      bucketStart: 0.1
+      bucketFactor: 2
+      bucketCount: 15
+
+  # TLS/SSL Configuration
+  tls:
+    enabled: false
+    secretName: ""
+    cert: ""
+    key: ""
+
+  # Logging configuration
+  logging:
+    verbosity: 2
+
+  # Database connection
+  database:
+    url: ""
+    existingSecret: ""
+    secretKey: "database-url"

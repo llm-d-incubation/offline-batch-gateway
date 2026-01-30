@@ -1,0 +1,18 @@
+{{- if .Values.apiserver.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "batch-gateway.apiserver.fullname" . }}-config
+  labels:
+    {{- include "batch-gateway.apiserver.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # API Server configuration
+    host: {{ .Values.apiserver.config.host | quote }}
+    port: {{ .Values.apiserver.config.port | quote }}
+    batch_ttl_seconds: {{ .Values.apiserver.config.batchTTLSeconds }}
+    {{- if .Values.apiserver.tls.enabled }}
+    ssl_cert_file: "/etc/tls/tls.crt"
+    ssl_key_file: "/etc/tls/tls.key"
+    {{- end }}
+{{- end }}
