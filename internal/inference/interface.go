@@ -14,18 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package batch
+package inference
 
 import "context"
 
-type InferenceClient interface {
-	Generate(ctx context.Context, req *InferenceRequest) (*InferenceResponse, *InferenceError)
+// Client defines the interface for making inference requests
+type Client interface {
+	Generate(ctx context.Context, req *GenerateRequest) (*GenerateResponse, *ClientError)
 }
 
-type InferenceRequest struct {
+// GenerateRequest represents an inference generation request
+type GenerateRequest struct {
 	RequestID string                 // unique request id set by user
-	Model     string                 // model id (also inside Params)
-	Params    map[string]interface{} // parameters
+	Endpoint  string                 // API endpoint (e.g., "/v1/chat/completions")
+	Params    map[string]interface{} // parameters (must include "model")
 }
 
 // Request Params example openai chat completion with tool calls:
@@ -63,7 +65,9 @@ type InferenceRequest struct {
 //	  ],
 //	  "tool_choice": "auto"
 //	}
-type InferenceResponse struct {
+
+// GenerateResponse represents an inference generation response
+type GenerateResponse struct {
 	RequestID string
 	Response  []byte
 	RawData   interface{}
