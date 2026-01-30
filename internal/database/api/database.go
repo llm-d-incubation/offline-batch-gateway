@@ -119,8 +119,10 @@ type BatchPriorityQueueClient interface {
 	Dequeue(ctx context.Context, timeout time.Duration, maxObjs int) (
 		jobPriorities []*BatchJobPriority, err error)
 
-	// Remove deletes a job priority object from the queue.
-	Remove(ctx context.Context, jobPriority *BatchJobPriority) error
+	// Remove removes jobPriority from the queue.
+	// It returns the removed job numbers.
+	// An error is returned only if the removal operation fails.
+	Remove(ctx context.Context, jobPriority *BatchJobPriority) (int, error)
 }
 
 // -- Batch jobs events and channels --
