@@ -416,21 +416,5 @@ func (c *BatchApiHandler) CancelBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Remove the job id from the priority queue.
-	jobPriority = &api.BatchJobPriority{
-		ID: batchID,
-	}
-	c.queueClient.PQDelete(ctx, jobPriority)
-
-	// Send a cancel event on the event channel associated with the job.
-	event := []api.BatchEvent{
-		{
-			ID:   batchID,
-			Type: api.BatchEventCancel,
-			TTL:  c.config.BatchTTLSeconds,
-		},
-	}
-	c.eventClient.ECProducerSendEvents(ctx, event)
-
 	common.WriteJSONResponse(ctx, w, http.StatusOK, batch)
 }
