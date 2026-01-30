@@ -19,8 +19,10 @@ limitations under the License.
 package redis_test
 
 import (
+	"bytes"
 	"context"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -79,12 +81,12 @@ func TestRedisClient(t *testing.T) {
 	}
 
 	t.Run("creates client", func(t *testing.T) {
-		rds := setupRedisClient(t, redisUrl, redisCaCert)
+		dbClient := setupRedisClient(t, redisUrl, redisCaCert)
 		t.Cleanup(func() {
-			rds.Close()
+			dbClient.Close()
 		})
-		t.Logf("Memory address of db redis client: %p", rds)
-		if rds == nil {
+		t.Logf("Memory address of db redis client: %p", dbClient)
+		if dbClient == nil {
 			t.Fatal("Expected db redis client to be non-nil")
 		}
 	})
@@ -122,6 +124,7 @@ func TestRedisClient(t *testing.T) {
 			}()
 		}
 		wg.Wait()
+		var jobIDs []string
 		for i := 0; i < nJobs; i++ {
 			jobID := uuid.New().String()
 			job := &db_api.BatchItem{
@@ -133,6 +136,7 @@ func TestRedisClient(t *testing.T) {
 				Status: []byte("status"),
 			}
 			jobs[jobID] = job
+			jobIDs = append(jobIDs, jobID)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -147,6 +151,32 @@ func TestRedisClient(t *testing.T) {
 		}
 		wg.Wait()
 		time.Sleep(1 * time.Second) // To make sure the short ttl jobs get expired.
+
+		resJobs, _, err := dbClient.DBGet(context.Background(), jobIDs, nil, db_api.TagsLogicalCondNa, true, 0, nJobs*2)
+		if err != nil {
+			t.Fatalf("Failed to get items: %v", err)
+		}
+		if len(resJobs) != nJobs {
+			t.Fatalf("Invalid number of items %d != %d", len(resJobs), nJobs)
+		}
+		for _, resJob := range resJobs {
+			tJob := jobs[resJob.ID]
+			if resJob.ID != tJob.ID {
+				t.Fatalf("Mismatch id %s != %s", resJob.ID, tJob.ID)
+			}
+			if !resJob.SLO.Equal(tJob.SLO) {
+				t.Fatalf("Mismatch slo %s != %s", resJob.SLO, tJob.SLO)
+			}
+			if !bytes.Equal(resJob.Spec, tJob.Spec) {
+				t.Fatalf("Mismatch spec %s != %s", resJob.Spec, tJob.Spec)
+			}
+			if !bytes.Equal(resJob.Status, tJob.Status) {
+				t.Fatalf("Mismatch status %s != %s", resJob.Spec, tJob.Spec)
+			}
+			if !slices.Equal(resJob.Tags, tJob.Tags) {
+				t.Fatalf("Mismatch tags %s != %s", resJob.Spec, tJob.Spec)
+			}
+		}
 	})
 
 }
